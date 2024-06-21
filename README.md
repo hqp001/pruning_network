@@ -1,1 +1,1 @@
-# pruning_network
+# Pruning Gurobi MNIST
