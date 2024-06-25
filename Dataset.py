@@ -1,5 +1,4 @@
 import torchvision.transforms as transforms
-import matplotlib.pyplot as plt
 import torchvision
 import torch
 
@@ -30,11 +29,11 @@ class MNISTDataset:
         self.x, self.y = self.preprocess_data(self.data)
 
         return self.x, self.y
-    
+
     def view_one_image(self, orig_image_idx):
 
         # print(orig_image_idx)
-        
+
         fig, axs = plt.subplots(1, 1, figsize=(5, 5))
 
         orig_image, label = self.data[orig_image_idx]

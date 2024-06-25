@@ -1,5 +1,4 @@
 import numpy as np
-from matplotlib import pyplot as plt
 import time
 
 import torch
@@ -18,7 +17,7 @@ import time
 def dense_passing(model, where):
 
     if where == GRB.Callback.MIPSOL:
-        
+
         print("Found a solution")
 
         variables = model.getVars()
@@ -80,7 +79,7 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
         m.optimize(dense_passing)
 
     else:
-        
+
         raise ValueError(f"Callback {callback} doesn't exist")
 
 
@@ -100,7 +99,7 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
             m._x_max_sol = values
 
         return m._x_max_sol, m.ObjVal, m.Runtime
-    
+
     else:
         #print(f'end with status: {m.status}')
         return None, None, m.Runtime

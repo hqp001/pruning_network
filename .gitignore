@@ -2,3 +2,5 @@ benchmarks/
 output.txt
 pytorch_model/
 __pycache__/
+myenv/
+MNIST/

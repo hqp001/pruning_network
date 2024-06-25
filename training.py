@@ -33,10 +33,10 @@ SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
 
 TEST = True if 'test' in MODEL_PATH else False
 
-max_epochs = 70
+max_epochs = 1
 learning_rate = 0.001
 train_first = False
-n_rounds = 10
+n_rounds = 1
 
 def set_seed(seed):
 
