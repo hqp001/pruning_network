@@ -1,75 +1,129 @@
 import torch
-from Model import SimpleNN
-from Dataset import MNISTDataset
+import pandas as pd
+from Model import ONNXModel
+from onnx2torch import convert
+import onnx
 import numpy as np
 import random
-import csv
 import os
-from gurobi_MNIST import solve_with_gurobi
+from gurobi_MNIST import solve_with_gurobi_and_record
 import argparse
+from vnnlib.compat import read_vnnlib_simple
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
-parser.add_argument('--seed', type=int, required=True, help="Random seed for reproducibility")
-parser.add_argument('--sparsity', type=float, required=True, help="Sparsity level (between 0 and 1)")
-parser.add_argument('--callback', type=str, default="none", choices=["none", "dense_passing"], required=False, help="Choose Callback function")
+parser.add_argument('--sparsity',
+        default=0.5,
+        type=float,
+        required=False,
+        help="Sparsity level (between 0 and 1)")
+parser.add_argument('--model_path',
+        type=str,
+        required=False,
+        default=f"benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx",
+        help='Path to the model file')
+parser.add_argument('--instance_path',
+        type=str,
+        required=False,
+        default=f"benchmarks/mnist_fc/vnnlib/prop_0_0.03.vnnlib",
+        help='Path to the instance file')
+parser.add_argument('--time_limit',
+        type=int,
+        required=False,
+        default=300,
+        help='Time limit for the program in seconds (default is 3600 seconds)')
+parser.add_argument('--output_path',
+        type=str,
+        required=False,
+        default="output.txt",
+        help="Output path")
+parser.add_argument('--subfolder',
+        type=str,
+        required=False,
+        default="sparse_std",
+        help="Subfolder name")
+parser.add_argument('--callback',
+        type=str,
+        required=False,
+        default="none",
+        help="Name of call back function")
 
 
 args = parser.parse_args()
 
-
-SEED = args.seed
 SPARSITY = args.sparsity
-TRAIN_FIRST = False
-DELTA = 15
-TIME_LIMIT = 3600
-FOLDER_PATH = f"./results/seed_{SEED}"
+TIME_LIMIT = args.time_limit
+
+FOLDER_PATH = os.path.dirname(__file__)
+
+ONNX_PATH = f"{args.model_path}"
+INSTANCE_PATH = f"{args.instance_path}"
+OUTPUT_PATH = f"{args.output_path}"
+
+
+TEST = True if 'test' in ONNX_PATH else False
+SUBFOLDER = "test" if TEST else args.subfolder
+
+MODEL_NAME, _ = os.path.splitext(os.path.basename(ONNX_PATH))
+LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}"
+DENSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}.pth"
+SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
+
 CALLBACK = args.callback
-NUM_IMAGES_PER_DIGIT=2
 
+def run_gurobi(model, dense_model, input):
 
-def append_to_csv(file_name, data_dict):
-    # Check if the file already exists
-    file_exists = os.path.isfile(file_name)
+    image_range = input[0]
 
-    # Open the file in append mode
-    with open(file_name, 'a', newline='') as csvfile:
-        fieldnames = data_dict.keys()
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+    output_range = input[1]
 
-        # If the file does not exist, write the header
-        if not file_exists:
-            writer.writeheader()
+    nn_regression = torch.nn.Sequential(*model.layers)
 
-        # Write the data dictionary as a new row
-        writer.writerow(data_dict)
+    first_image = []
 
+    for i in image_range:
 
-def run_gurobi(model, dense_model, image_x):
+        first_image.append((image_range[0][1] + image_range[0][0]) / 2)
 
-    nn_regression = torch.nn.Sequential(*model.layers[:-1])
+    #print(first_image)
 
-    ex_prob = nn_regression.forward(image_x)
+    ex_prob = nn_regression.forward(torch.tensor(first_image))
 
     top2_value, top2_index = torch.topk(ex_prob, 2)
 
-    correct_label = top2_index[0].item()
-    wrong_label = top2_index[1].item()
+    correct_label = np.argmax(output_range[0][0][0])
 
-    image = image_x.numpy()
+    #print(correct_label)
 
-    print('!Gurobi Start!')
-    x_max, max_, time_count = solve_with_gurobi(nn_regression, dense_model, image, DELTA, ex_prob, wrong_label, correct_label, TIME_LIMIT, CALLBACK)
+    wrong_label = None
+
+    if top2_index[0].item() != correct_label:
+        wrong_label = top2_index[0].item()
+
+    else:
+        wrong_label = top2_index[1].item()
+
+    x_max, max_, time_count = solve_with_gurobi_and_record(nn_regression, dense_model, image_range, output_range, TIME_LIMIT, correct_label, wrong_label, CALLBACK)
 
     # print(x_max, max_, time_count)
+    #print(max_, time_count, correct_label, wrong_label)
     return x_max, max_, time_count, correct_label, wrong_label
 
 def import_model(file_name):
 
-    model = SimpleNN()
+    onnx_model = convert(onnx.load(ONNX_PATH))
 
-    model.load_state_dict(torch.load(file_name))
+    torch_model = ONNXModel(onnx_model)
 
-    return model
+    torch_model.load_state_dict(torch.load(file_name))
+
+    return torch_model
+
+def get_image(file_name):
+
+    result = read_vnnlib_simple(file_name, 784, 10)
+
+    return result[0][0], result[0][1]
+
 
 def set_seed(seed):
 
@@ -77,81 +131,42 @@ def set_seed(seed):
     torch.manual_seed(seed)
     random.seed(seed)
 
-print("Seed: ", SEED)
-set_seed(SEED)
+def print_result_to_file(result, x_max, y_max):
+    with open(OUTPUT_PATH, "w") as f:
+        f.write(result + "\n")
+        if x_max != None:
+            f.write("(")
+            for idx, value in enumerate(x_max):
+                f.write(f"(X_{idx} {value})\n")
+            for idx, value in enumerate(y_max):
+                f.write(f"(Y_{idx} {value})\n")
+            f.write(")")
 
-dense_model = import_model(f"{FOLDER_PATH}/model/dense.pth")
 
-sparse_model = import_model(f"{FOLDER_PATH}/model/sparse_{int(SPARSITY * 100)}_{TRAIN_FIRST}.pth")
-sparse_model = import_model(f"{FOLDER_PATH}/model/dense.pth") if SPARSITY == 0 else sparse_model
+SPARSE_PATH = DENSE_PATH if SPARSITY == 0 else SPARSE_PATH
+
+dense_model = import_model(DENSE_PATH)
+sparse_model = import_model(SPARSE_PATH)
 
 print(dense_model.count_parameters())
 print(sparse_model.count_parameters())
 
-train_data = MNISTDataset(train=True)
-x_train, y_train = MNISTDataset(train=True).get_data()
+x_max, _max, time_count, correct_label, wrong_label = run_gurobi(sparse_model, dense_model, get_image(INSTANCE_PATH))
 
-sort_data = []
+if x_max != None:
 
-data_dict = {}
-data_dict["seed"] = SEED
-data_dict["sparsity"] = SPARSITY
-data_dict["train_first"] = TRAIN_FIRST
-data_dict["delta"] = DELTA
-data_dict["time_limit"] = TIME_LIMIT
+    dense_model.eval()
+    sparse_model.eval()
+    with torch.no_grad():
+        dense_output = torch.argmax(dense_model.forward(torch.tensor(x_max))).item()
+else:
+    dense_output = None
 
-for i in range(10):
-    sort_data.append([])
+if dense_output != None and dense_output != correct_label:
+    print_result_to_file("sat", x_max, dense_model.forward(torch.tensor(x_max)).tolist())
+else:
+    print_result_to_file("unsat", None, None)
 
-for i in range(len(x_train)):
-    sort_data[y_train[i]].append((x_train[i], i))
-
-for i in range(10):
-
-    random_selection = random.sample(sort_data[i], NUM_IMAGES_PER_DIGIT)
-
-    for j in random_selection:
-
-        print("Running: ", i)
-
-        x_max, _max, time_count, correct_label, wrong_label = run_gurobi(sparse_model, dense_model, j[0])
-
-        data_dict["image_index"] = j[1]
-        data_dict["label"] = i
-        data_dict["predict_label"] = correct_label
-        data_dict["wrong_label"] = wrong_label
-        data_dict["x_max"] = x_max
-        data_dict["max"] = _max
-        data_dict["runtime"] = time_count
-        data_dict["method"] = CALLBACK
-
-
-        if x_max != None:
-
-            sparse_model.eval()
-            dense_model.eval()
-            with torch.no_grad():
-                dense_predicted = torch.argmax(dense_model.forward(torch.tensor(x_max)))
-                sparse_predicted = torch.argmax(sparse_model.forward(torch.tensor(x_max)))
-                origin_dense = torch.argmax(dense_model.forward(j[0]))
-                origin_sparse = torch.argmax(sparse_model.forward(j[0]))
-
-            data_dict["valid_image"] = (dense_predicted != origin_dense).item()
-
-
-            save_image_path = f"{FOLDER_PATH}/images"
-            os.makedirs(save_image_path, exist_ok=True)
-
-            # View image
-            # train_data.save_image(j[1], origin_dense, origin_sparse, x_max, dense_predicted, sparse_predicted, f"{save_image_path}/{j[1]}_{int(SPARSITY * 100)}_{TRAIN_FIRST}.png")
-
-        else:
-            data_dict["valid_image"] = False
-
-
-        append_to_csv(f"{FOLDER_PATH}/summary.csv", data_dict=data_dict)
-
-
-
+#append_to_csv(f"{file_path}/summary_{sparsity}.csv", data_dict=data_dict)
 
 

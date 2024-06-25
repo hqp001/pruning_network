@@ -4,25 +4,39 @@ import numpy as np
 import torch
 from copy import deepcopy
 import random
-from Model import SimpleNN
+from Model import ONNXModel
 from Pruner import ModelTrainer, Pruner
+from onnx2torch import convert
+import onnx
 import os
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
-parser.add_argument('--seed', type=int, required=True, help="Random seed for reproducibility")
-parser.add_argument('--sparsity', type=float, required=True, help="Sparsity level (between 0 and 1)")
+parser.add_argument('--sparsity', default=0.5, type=float, required=False, help="Sparsity level (between 0 and 1)")
+parser.add_argument('--model_path', default="mnist_fc/onnx/mnist-net_256x2.onnx", type=str, required=False, help="Model path")
+
+
 args = parser.parse_args()
 
-seed = args.seed
-sparsity = args.sparsity
-max_epochs = 1
-learning_rate = 0.01
-train_first = False
-n_rounds = 1
-file_path = f"./results/seed_{seed}/model"
-device = "cuda" if torch.cuda.is_available() else "cpu"
+SEED = 70
+SPARSITY = args.sparsity
+FOLDER_PATH = os.path.dirname(__file__)
+# MODEL_PATH=f"{FOLDER_PATH}/benchmarks/test/test_nano.onnx"
+MODEL_PATH=f"{FOLDER_PATH}/benchmarks/{args.model_path}"
 
-print("Device to train: ", device)
+
+MODEL_NAME, _ = os.path.splitext(os.path.basename(MODEL_PATH))
+SAVE_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/sparse_no_train"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+DENSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}.pth"
+SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
+
+TEST = True if 'test' in MODEL_PATH else False
+
+max_epochs = 70
+learning_rate = 0.001
+train_first = False
+n_rounds = 10
 
 def set_seed(seed):
 
@@ -30,24 +44,24 @@ def set_seed(seed):
     torch.manual_seed(seed)
     random.seed(seed)
 
-def train_model(n_rounds, sparsity, train_first):
+def train_model(nn_model, n_rounds):
 
-    print("Device to train: ", device)
+    print("Device to train: ", DEVICE)
 
     x_train, y_train = MNISTDataset(train=True).get_data()
     x_test, y_test = MNISTDataset(train=False).get_data()
 
-    nn_model = SimpleNN()
+    if not train_first:
+        print("Not using trained network")
+        nn_model.apply(initialize_weights)
 
-    if train_first:
-        nn_model.load_state_dict(torch.load(f'{file_path}/dense.pth'))
+    nn_model = nn_model.to(device=DEVICE)
 
-    nn_model = nn_model.to(device=device)
-    trainer = ModelTrainer(nn_model, max_epochs=max_epochs, learning_rate= learning_rate, device=device)
+    trainer = ModelTrainer(nn_model, max_epochs=max_epochs, learning_rate= learning_rate, device=DEVICE)
 
     initial_weights = deepcopy(nn_model.state_dict())
     total_parameters = nn_model.count_parameters()
-    prune_pc_per_round = 1 - (1 - sparsity) ** (1 / n_rounds)
+    prune_pc_per_round = 1 - (1 - SPARSITY) ** (1 / n_rounds)
 
     # print(nn_model.get_weights())
 
@@ -58,6 +72,7 @@ def train_model(n_rounds, sparsity, train_first):
 
         # Fit the model to the training data
         trainer.train(X=x_train, y=y_train)
+
         pruned_model = Pruner(model=nn_model, trainer=trainer, sparsity=prune_pc_per_round).prune().get_model()
 
         # Reset model
@@ -67,14 +82,12 @@ def train_model(n_rounds, sparsity, train_first):
         # print(f"New parameters: {n_pruned_parameters}/{total_parameters}")
 
     # Train final model
-    trainer.train(x_train, y_train)
+    trainer.train(X=x_train, y=y_train)
     nn_model.apply_mask()
-    print("Non zero params: ", nn_model.count_parameters())
-
-
 
     validation_score = trainer.calculate_score(x_test, y_test)
-    print(f"Validation set score: {validation_score:.4}")
+
+    print(validation_score)
 
     # print(nn_model.get_weights())
 
@@ -83,41 +96,37 @@ def train_model(n_rounds, sparsity, train_first):
 
 def dense_model_train():
 
-    print("Dense Model")
+    # Convert to PyTorch
+    onnx_model = convert(onnx.load(MODEL_PATH))
 
-    x_train, y_train = MNISTDataset(train=True).get_data()
-    x_test, y_test = MNISTDataset(train=False).get_data()
+    torch_model = ONNXModel(onnx_model)
 
-    nn_model = SimpleNN()
-    nn_model = nn_model.to(device=device)
-    trainer = ModelTrainer(nn_model, max_epochs=max_epochs, learning_rate= learning_rate, device=device)
+    return torch_model
 
-    trainer.train(x_train, y_train)
+def initialize_weights(layer):
+    if isinstance(layer, torch.nn.Linear):
+        # Initialize weights with a normal distribution
+        torch.nn.init.normal_(layer.weight, mean=0.0, std=0.05)
+        if layer.bias is not None:
+            torch.nn.init.normal_(layer.bias, mean=0.0, std=0.05)
 
-    print("Non zero params: ", nn_model.count_parameters())
 
-    validation_score = trainer.calculate_score(x_test, y_test)
+set_seed(SEED)
 
-    nn_model = nn_model.to("cpu")
-    return nn_model, validation_score
+dense_model = dense_model_train()
 
-set_seed(seed)
+if os.path.exists(DENSE_PATH):
+    print(f"The file {DENSE_PATH} exists.")
 
-dense_model, dense_validation = dense_model_train()
-dense_path = f"{file_path}/dense.pth"
-
-if os.path.exists(dense_path):
-    print(f"The file {dense_path} exists.")
-    
     # Load the state dictionary from the file
-    loaded_state_dict = torch.load(dense_path)
-    
+    loaded_state_dict = torch.load(DENSE_PATH)
+
     # Get the current model's state dictionary
     current_state_dict = dense_model.state_dict()
-    
+
     # Compare the state dictionaries
     state_dicts_equal = all(torch.equal(current_state_dict[key], loaded_state_dict[key]) for key in current_state_dict)
-    
+
     if state_dicts_equal:
         print("The model state dictionary is the same as in the file.")
     else:
@@ -125,20 +134,28 @@ if os.path.exists(dense_path):
 
 else:
         # Save the model state dictionary
-        print(f"The file {dense_path} does not exist. Saving the model state dictionary.")
-        
+        print(f"The file {DENSE_PATH} does not exist. Saving the model state dictionary.")
+
         # Ensure the directory exists
-        os.makedirs(os.path.dirname(dense_path), exist_ok=True)
-        
-        torch.save(dense_model.state_dict(), f'{dense_path}')
+        os.makedirs(os.path.dirname(DENSE_PATH), exist_ok=True)
 
+        torch.save(dense_model.state_dict(), f'{DENSE_PATH}')
 
+sparse_model = None
 
-sparse_model, sparse_validation = train_model(n_rounds=n_rounds, sparsity=sparsity, train_first=train_first)
+if not TEST:
 
-torch.save(sparse_model.state_dict(), f'{file_path}/sparse_{int(sparsity * 100)}_{train_first}.pth')
+    sparse_model, validation_score = train_model(dense_model_train(), n_rounds=n_rounds)
+
+    torch.save(sparse_model.state_dict(), SPARSE_PATH)
+
+    print(validation_score)
+
+else:
+
+    sparse_model = dense_model_train()
+
 
 print(dense_model.count_parameters())
 print(sparse_model.count_parameters())
-
 

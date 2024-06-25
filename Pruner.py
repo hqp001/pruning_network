@@ -1,6 +1,7 @@
 from skorch import NeuralNetClassifier
 import torch.nn.utils.prune as prune
 from torch import nn
+import torch
 
 
 # Train the original model
@@ -12,7 +13,10 @@ class ModelTrainer:
         self.clf = NeuralNetClassifier(
             self.model, 
             max_epochs=self.max_epochs, 
-            lr=self.learning_rate, 
+            lr=self.learning_rate,
+            optimizer=torch.optim.SGD,
+            criterion=nn.CrossEntropyLoss,
+            batch_size=64,
             iterator_train__shuffle=True,
             device=device
         )
