@@ -14,4 +14,4 @@ results_file_path=$5
 timeout=$6
 
 # Run the Python script with the provided arguments
-python ~/Summer2024/gurobi_MNIST/run_gurobi_onnx.py --sparsity 0.5 --model_path "$onnx_file_path" --instance_path "$vnnlib_file_path" --output_path "$results_file_path" --time_limit "$timeout"
+python ./run_gurobi.py --sparsity 0 --subfolder "sparse_std" --model_path "$onnx_file_path" --instance_path "$vnnlib_file_path" --output_path "$results_file_path" --time_limit "$timeout"

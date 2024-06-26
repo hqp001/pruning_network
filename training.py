@@ -12,7 +12,7 @@ import os
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
 parser.add_argument('--sparsity', default=0.5, type=float, required=False, help="Sparsity level (between 0 and 1)")
-parser.add_argument('--model_path', default="mnist_fc/onnx/mnist-net_256x2.onnx", type=str, required=False, help="Model path")
+parser.add_argument('--model_path', default="./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx", type=str, required=False, help="Model path")
 
 
 args = parser.parse_args()
@@ -21,7 +21,7 @@ SEED = 70
 SPARSITY = args.sparsity
 FOLDER_PATH = os.path.dirname(__file__)
 # MODEL_PATH=f"{FOLDER_PATH}/benchmarks/test/test_nano.onnx"
-MODEL_PATH=f"{FOLDER_PATH}/benchmarks/{args.model_path}"
+MODEL_PATH=args.model_path
 
 
 MODEL_NAME, _ = os.path.splitext(os.path.basename(MODEL_PATH))
