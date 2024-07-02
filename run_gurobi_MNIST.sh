@@ -14,8 +14,23 @@
 #
 # for example ./run_all_categories.sh v1 ~/repositories/simple_adversarial_generator/vnncomp_scripts . ./out.csv ./counterexamples "test acasxu" all
 
-FOLDER_NAME="dense"
-FOLDER_PATH="./vnncomp2022_results/$FOLDER_NAME"
+
+if [ "$#" -ne 2 ]; then
+    echo "Usage: $0 <sparsity> <subfolder>"
+    exit 1
+fi
+
+
+SPARSITY=$1
+SUBFOLDER=$2
+CALLBACK="dense_passing"
+
+export SPARSITY
+export SUBFOLDER
+export CALLBACK
+
+FOLDER_NAME="${SUBFOLDER}_${SPARSITY}"
+FOLDER_PATH="./vnncomp2022_results/${FOLDER_NAME}"
 CATEGORY="mnist_fc"
 
 if [ -d "$FOLDER_PATH" ]; then
@@ -30,7 +45,7 @@ else
     fi
 fi
 
-./vnncomp2022_benchmarks/run_all_categories.sh v1 . ./vnncomp2022_benchmarks ./$FOLDER_PATH/results.csv ./$FOLDER_PATH $CATEGORY first
+./vnncomp2022_benchmarks/run_all_categories.sh v1 . ./vnncomp2022_benchmarks ./${FOLDER_PATH}/results.csv ./${FOLDER_PATH} $CATEGORY all
 
 
 

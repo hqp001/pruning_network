@@ -7,12 +7,18 @@ import random
 from Model import ONNXModel
 from Pruner import ModelTrainer, Pruner
 from onnx2torch import convert
+import time
 import onnx
 import os
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
+
 parser.add_argument('--sparsity', default=0.5, type=float, required=False, help="Sparsity level (between 0 and 1)")
+
 parser.add_argument('--model_path', default="./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx", type=str, required=False, help="Model path")
+
+parser.add_argument('--sub_folder', default="a", type=str, required=False, help="Path to subfolder")
+
 
 
 args = parser.parse_args()
@@ -25,7 +31,7 @@ MODEL_PATH=args.model_path
 
 
 MODEL_NAME, _ = os.path.splitext(os.path.basename(MODEL_PATH))
-SAVE_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/sparse_no_train"
+SAVE_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{args.sub_folder}_{SPARSITY}"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 DENSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}.pth"
@@ -33,10 +39,10 @@ SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
 
 TEST = True if 'test' in MODEL_PATH else False
 
-max_epochs = 1
+max_epochs = 10
 learning_rate = 0.001
-train_first = False
-n_rounds = 1
+train_first = True
+n_rounds = 10
 
 def set_seed(seed):
 
@@ -48,8 +54,8 @@ def train_model(nn_model, n_rounds):
 
     print("Device to train: ", DEVICE)
 
-    x_train, y_train = MNISTDataset(train=True).get_data()
-    x_test, y_test = MNISTDataset(train=False).get_data()
+    train_loader = MNISTDataset(train=True).get_data()
+    test_loader = MNISTDataset(train=False).get_data()
 
     if not train_first:
         print("Not using trained network")
@@ -58,6 +64,9 @@ def train_model(nn_model, n_rounds):
     nn_model = nn_model.to(device=DEVICE)
 
     trainer = ModelTrainer(nn_model, max_epochs=max_epochs, learning_rate= learning_rate, device=DEVICE)
+
+    print(trainer.calculate_score(test_loader))
+    #print(trainer.calculate_score(train_loader))
 
     initial_weights = deepcopy(nn_model.state_dict())
     total_parameters = nn_model.count_parameters()
@@ -71,9 +80,9 @@ def train_model(nn_model, n_rounds):
         print(f"\nPruning round {round} of {n_rounds}")
 
         # Fit the model to the training data
-        trainer.train(X=x_train, y=y_train)
+        trainer.train(train_loader)
 
-        pruned_model = Pruner(model=nn_model, trainer=trainer, sparsity=prune_pc_per_round).prune().get_model()
+        pruned_model = Pruner(model=nn_model, sparsity=prune_pc_per_round).prune().get_model()
 
         # Reset model
         nn_model.initialize_weights(initial_weights)
@@ -81,11 +90,13 @@ def train_model(nn_model, n_rounds):
         # print(f"Model accuracy: {accuracy:.3f}%")
         # print(f"New parameters: {n_pruned_parameters}/{total_parameters}")
 
+    trainer = ModelTrainer(nn_model, max_epochs=1, learning_rate= learning_rate, device=DEVICE)
+
     # Train final model
-    trainer.train(X=x_train, y=y_train)
+    trainer.train(train_loader)
     nn_model.apply_mask()
 
-    validation_score = trainer.calculate_score(x_test, y_test)
+    validation_score = trainer.calculate_score(test_loader)
 
     print(validation_score)
 
@@ -112,6 +123,8 @@ def initialize_weights(layer):
 
 
 set_seed(SEED)
+
+start = time.time()
 
 dense_model = dense_model_train()
 
@@ -159,3 +172,4 @@ else:
 print(dense_model.count_parameters())
 print(sparse_model.count_parameters())
 
+print(time.time() - start)

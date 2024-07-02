@@ -24,7 +24,7 @@ parser.add_argument('--model_path',
 parser.add_argument('--instance_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_0_0.03.vnnlib",
+        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_0_0.05.vnnlib",
         help='Path to the instance file')
 parser.add_argument('--time_limit',
         type=int,
@@ -76,8 +76,6 @@ def run_gurobi(model, dense_model, input):
 
     output_range = input[1]
 
-    nn_regression = torch.nn.Sequential(*model.layers)
-
     first_image = []
 
     for i in image_range:
@@ -86,7 +84,7 @@ def run_gurobi(model, dense_model, input):
 
     #print(first_image)
 
-    ex_prob = nn_regression.forward(torch.tensor(first_image))
+    ex_prob = model.forward(torch.tensor(first_image))
 
     top2_value, top2_index = torch.topk(ex_prob, 2)
 
@@ -102,7 +100,7 @@ def run_gurobi(model, dense_model, input):
     else:
         wrong_label = top2_index[1].item()
 
-    x_max, max_, time_count = solve_with_gurobi_and_record(nn_regression, dense_model, image_range, output_range, TIME_LIMIT, correct_label, wrong_label, CALLBACK)
+    x_max, max_, time_count = solve_with_gurobi_and_record(model, dense_model, image_range, output_range, TIME_LIMIT, correct_label, wrong_label, CALLBACK)
 
     # print(x_max, max_, time_count)
     #print(max_, time_count, correct_label, wrong_label)

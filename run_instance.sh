@@ -13,5 +13,7 @@ vnnlib_file_path=$4
 results_file_path=$5
 timeout=$6
 
+echo "${SUBFOLDER}_${SPARSITY}" $CALLBACK
+
 # Run the Python script with the provided arguments
-python ./run_gurobi.py --sparsity 0 --subfolder "sparse_std" --model_path "$onnx_file_path" --instance_path "$vnnlib_file_path" --output_path "$results_file_path" --time_limit "$timeout"
+python ./run_gurobi.py --sparsity $SPARSITY --callback $CALLBACK --subfolder "${SUBFOLDER}_${SPARSITY}" --model_path "$onnx_file_path" --instance_path "$vnnlib_file_path" --output_path "$results_file_path" --time_limit "$timeout"

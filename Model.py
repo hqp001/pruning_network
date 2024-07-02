@@ -11,11 +11,11 @@ class SimpleNN(nn.Module):
     def __init__(self):
         super(SimpleNN, self).__init__()
         self.layers = [
-            nn.Linear(28 * 28, 500),
+            nn.Linear(2 * 2, 5),
             nn.ReLU(),
-            nn.Linear(500, 500),
+            nn.Linear(5, 5),
             nn.ReLU(),
-            nn.Linear(500, 10),
+            nn.Linear(5, 10),
             nn.Softmax(dim=0)
         ]
         self.model = nn.Sequential(*self.layers)
@@ -147,15 +147,15 @@ class ONNXModel(SimpleNN):
                 else:
 
                     raise ValueError(f"Unknown module: {submod}")
-                
+
             elif node.op == 'call_function':
                 if node.target == torch.relu:
                     layers.append(nn.ReLU())
 
                 else:
                     submod = dict(graph_module.named_modules())[node.target]
-                    raise ValueError(f"Unknown module: {submod}")  
-                
+                    raise ValueError(f"Unknown module: {submod}")
+
             elif node.op == 'output':
                 break
 

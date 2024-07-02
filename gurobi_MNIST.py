@@ -6,7 +6,7 @@ import torchvision
 
 import gurobipy as gp
 from gurobipy import GRB
-from gurobi_ml import add_predictor_constr
+from torch2gurobi import add_predictor_constr
 
 import time
 
@@ -33,6 +33,47 @@ def dense_passing(model, where):
             model._x_max_sol = input_sol
             model.terminate()
 
+def remove_region(model, where):
+
+    if where == gp.GRB.Callback.MIPSOL:
+
+        print("Found a solution")
+
+        variables = model.getVars()
+
+        input_variables = [var for var in variables if var.VarName.startswith("x")]
+
+        input_sol = [model.cbGetSolution(var) for var in input_variables]
+
+        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol)))
+
+        print("Dense output: ", dense_output)
+
+        if dense_output != model._right_label:
+            model._x_max_sol = input_sol
+
+        neuron_variables = [var for var in variables if var.VarName.startswith("neuron")]
+
+        print(neuron_variables)
+
+        neuron_sol = [model.cbGetSolution(var) for var in neuron_variables]
+
+        added_constr = 0
+
+        for i in range(len(neuron_sol)):
+            if (neuron_sol[i] == 0):
+                added_constr += neuron_variables[i]
+            else:
+                added_constr += (1 - neuron_variables[i])
+
+        #print(added_constr)
+
+        model.cbLazy(added_constr >= 1)
+
+        print("Removed region")
+
+
+
 
 
 def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range, correct_label, wrong_label, time_limit, callback):
@@ -47,9 +88,8 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
     m.setParam('OutputFlag', 1)
 
     x = m.addMVar(len(image_range), name="x")
-    y = m.addMVar((10, ), ub=gp.GRB.INFINITY, lb=-gp.GRB.INFINITY, name="y")
 
-    pred_constr = add_predictor_constr(m, nn_regression, x, y)
+    y = add_predictor_constr(m, nn_regression, x)
     # pred_constr.print_stats()
 
 
@@ -78,6 +118,12 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
 
         m.optimize(dense_passing)
 
+    elif callback == "remove_region":
+
+        m.setParam("LazyConstraints", 1)
+
+        m.optimize(remove_region)
+
     else:
 
         raise ValueError(f"Callback {callback} doesn't exist")
@@ -105,19 +151,16 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
         return None, None, m.Runtime
 
 
-def solve_with_gurobi_and_record(nn_regression, dense_model, image_range, output_range, time_limit, correct_label, wrong_label, callback):
+def solve_with_gurobi_and_record(surrogate_model, origin_model, image_range, output_range, time_limit, correct_label, wrong_label, callback):
 
-    start_time = time.time()
 
     #print(correct_label, wrong_label)
 
-    x_max, max_, time_count = solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range, correct_label, wrong_label, time_limit, callback)
+    x_max, max_, time_count = solve_optimal_adversary_with_gurobi(surrogate_model, origin_model, image_range, correct_label, wrong_label, time_limit, callback)
 
     # print(max_, time_count)
-    end_time = time.time()
-    elapsed_time = end_time - start_time
 
-    return x_max, max_, elapsed_time
+    return x_max, max_, time_count
     # input_size, layer_dims = get_model_info(nn_regression)
     # layer_num = len(layer_dims) - 1
     # if max_ is None:

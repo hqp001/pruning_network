@@ -6,3 +6,4 @@ myenv/
 MNIST/
 vnncomp2022_benchmarks/
 vnncomp2022_results
+log/
