@@ -54,8 +54,8 @@ def train_model(nn_model, n_rounds):
 
     print("Device to train: ", DEVICE)
 
-    train_loader = MNISTDataset(train=True).get_data()
-    test_loader = MNISTDataset(train=False).get_data()
+    train_loader = MNISTDataset(train=True, batch_size=64).get_data()
+    test_loader = MNISTDataset(train=False, batch_size=64).get_data()
 
     if not train_first:
         print("Not using trained network")
@@ -63,7 +63,7 @@ def train_model(nn_model, n_rounds):
 
     nn_model = nn_model.to(device=DEVICE)
 
-    trainer = ModelTrainer(nn_model, max_epochs=max_epochs, learning_rate= learning_rate, device=DEVICE)
+    trainer = ModelTrainer(nn_model, max_epochs=100, learning_rate= 1e-2, device=DEVICE)
 
     print(trainer.calculate_score(test_loader))
     #print(trainer.calculate_score(train_loader))
@@ -90,10 +90,16 @@ def train_model(nn_model, n_rounds):
         # print(f"Model accuracy: {accuracy:.3f}%")
         # print(f"New parameters: {n_pruned_parameters}/{total_parameters}")
 
-    trainer = ModelTrainer(nn_model, max_epochs=1, learning_rate= learning_rate, device=DEVICE)
+    trainer = ModelTrainer(nn_model, max_epochs=200, learning_rate=1e-3, device=DEVICE)
+
+    trainer.train(train_loader)
 
     # Train final model
-    trainer.train(train_loader)
+    test_score = trainer.calculate_score(test_loader)
+
+    print(test_score)
+
+    #trainer.train(train_loader)
     nn_model.apply_mask()
 
     validation_score = trainer.calculate_score(test_loader)

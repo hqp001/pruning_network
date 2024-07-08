@@ -5,15 +5,15 @@ from torch.utils.data import DataLoader
 
 
 class MNISTDataset:
-    def __init__(self, train=True):
+    def __init__(self, train=True, batch_size=64):
 
         transform = transforms.Compose([
-            transforms.ToTensor(),            
+            transforms.ToTensor(),
         ])
 
         self.data = torchvision.datasets.MNIST(root="./MNIST", train=train, download=True, transform=transform)
 
-        self.loader = DataLoader(self.data, batch_size=64, shuffle=False, num_workers=2)
+        self.loader = DataLoader(self.data, batch_size=batch_size, shuffle=False, num_workers=2)
 
 
     def __len__(self):

@@ -1,8 +1,7 @@
 #!/bin/bash
-#SBATCH -p gpu # partition (queue)
+#SBATCH -p short # partition (queue)
 #SBATCH -N 1 # (leave at 1 unless using multi-node specific code)
-#SBATCH -n 2 # number of cores
-#SBATCH --gres=gpu:1 # number of GPUs
+#SBATCH -n 8 # number of cores
 #SBATCH --mem=16384 # total memory
 #SBATCH --job-name="myjob" # job name
 #SBATCH -o ./log/slurm.%j.stdout.txt # STDOUT
@@ -10,10 +9,14 @@
 #SBATCH --mail-user=username@bucknell.edu # address to email
 #SBATCH --mail-type=ALL # mail events (NONE, BEGIN, END, FAIL, ALL)
 
-SPARSITY=0.95
-SUBFOLDER="adam_no_softmax"
+module load gurobi-optimizer
 
-python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx" --sub_folder $SUBFOLDER
-python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x4.onnx" --sub_folder $SUBFOLDER
-python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x6.onnx" --sub_folder $SUBFOLDER
-
+python count_neurons.py --digit 1
+python count_neurons.py --digit 2
+python count_neurons.py --digit 3
+python count_neurons.py --digit 4
+python count_neurons.py --digit 5
+python count_neurons.py --digit 6
+python count_neurons.py --digit 7
+python count_neurons.py --digit 8
+python count_neurons.py --digit 9

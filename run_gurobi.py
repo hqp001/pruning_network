@@ -24,7 +24,7 @@ parser.add_argument('--model_path',
 parser.add_argument('--instance_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_0_0.05.vnnlib",
+        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_12_0.05.vnnlib",
         help='Path to the instance file')
 parser.add_argument('--time_limit',
         type=int,

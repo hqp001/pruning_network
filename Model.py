@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.utils.prune as prune
 from onnx2torch.node_converters.matmul import OnnxMatMul
+from onnx2torch import convert
 
 
 # Neural Network Configuration
@@ -174,4 +175,9 @@ class TorchModel(SimpleNN):
         layers = []
 
         model = torch.load(file_name)
+
+#import onnx
+
+#model = convert(onnx.load("./vnncomp2022_benchmarks/benchmarks/cifar100_tinyimagenet_resnet/onnx/CIFAR100_resnet_small.onnx"))
+#print(model)
 

@@ -6,6 +6,7 @@ import torchvision
 
 import gurobipy as gp
 from gurobipy import GRB
+#from gurobi_ml import add_predictor_constr
 from torch2gurobi import add_predictor_constr
 
 import time
@@ -26,7 +27,7 @@ def dense_passing(model, where):
 
         input_sol = [model.cbGetSolution(var) for var in input_variables]
 
-        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol)))
+        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol))).item()
 
         if dense_output != model._right_label:
             print("Stopping the optimization...")
@@ -45,23 +46,26 @@ def remove_region(model, where):
 
         input_sol = [model.cbGetSolution(var) for var in input_variables]
 
-        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol)))
+        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol))).item()
 
-        print("Dense output: ", dense_output)
+        print("Dense output: ", dense_output, model._right_label)
 
         if dense_output != model._right_label:
             model._x_max_sol = input_sol
+            print("Terminating the model")
+            model.terminate()
 
         neuron_variables = [var for var in variables if var.VarName.startswith("neuron")]
 
-        print(neuron_variables)
 
         neuron_sol = [model.cbGetSolution(var) for var in neuron_variables]
 
         added_constr = 0
 
+        #print(neuron_variables)
+
         for i in range(len(neuron_sol)):
-            if (neuron_sol[i] == 0):
+            if (neuron_sol[i] <= 0.5):
                 added_constr += neuron_variables[i]
             else:
                 added_constr += (1 - neuron_variables[i])
@@ -78,6 +82,7 @@ def remove_region(model, where):
 
 def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range, correct_label, wrong_label, time_limit, callback):
 
+    #nn_regression = torch.nn.Sequential(*nn_regression.layers)
     m = gp.Model()
 
     m._network = dense_model
@@ -88,8 +93,8 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
     m.setParam('OutputFlag', 1)
 
     x = m.addMVar(len(image_range), name="x")
-
-    y = add_predictor_constr(m, nn_regression, x)
+    y = m.addMVar((10, ), lb=-gp.GRB.INFINITY, name="y")
+    add_predictor_constr(m, nn_regression, x, y)
     # pred_constr.print_stats()
 
 
@@ -139,6 +144,7 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
         return None, None, m.Runtime
     elif m.status == GRB.OPTIMAL or m.SolCount > 0:
         # values = [x[i].x for i in range(len(x.tolist()))]
+
         values = x.X.reshape(-1).tolist()
 
         if m._x_max_sol == None:
@@ -146,9 +152,13 @@ def solve_optimal_adversary_with_gurobi(nn_regression, dense_model, image_range,
 
         return m._x_max_sol, m.ObjVal, m.Runtime
 
+    elif m.status == GRB.INTERRUPTED or m.status == GRB.TIME_LIMIT:
+
+        return m._x_max_sol, m.ObjVal, m.Runtime
+
     else:
         #print(f'end with status: {m.status}')
-        return None, None, m.Runtime
+        raise ValueError(f"Unexpected status : {m.status}")
 
 
 def solve_with_gurobi_and_record(surrogate_model, origin_model, image_range, output_range, time_limit, correct_label, wrong_label, callback):

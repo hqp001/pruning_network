@@ -15,21 +15,21 @@
 # for example ./run_all_categories.sh v1 ~/repositories/simple_adversarial_generator/vnncomp_scripts . ./out.csv ./counterexamples "test acasxu" all
 
 
-if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <sparsity> <subfolder>"
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <sparsity> <subfolder> <callback>"
     exit 1
 fi
 
 
 SPARSITY=$1
 SUBFOLDER=$2
-CALLBACK="dense_passing"
+CALLBACK=$3
 
 export SPARSITY
 export SUBFOLDER
 export CALLBACK
 
-FOLDER_NAME="${SUBFOLDER}_${SPARSITY}"
+FOLDER_NAME="${SUBFOLDER}_${SPARSITY}_${CALLBACK}"
 FOLDER_PATH="./vnncomp2022_results/${FOLDER_NAME}"
 CATEGORY="mnist_fc"
 
