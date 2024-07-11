@@ -1,15 +1,18 @@
-from Dataset import MNISTDataset
 import argparse
-import numpy as np
-import torch
-from copy import deepcopy
-import random
-from Model import ONNXModel
-from Pruner import ModelTrainer, Pruner
-from onnx2torch import convert
 import time
-import onnx
 import os
+import random
+from copy import deepcopy
+
+import torch
+import numpy as np
+import onnx
+from onnx2torch import convert
+
+from Trainer.Dataset import MNISTDataset, CIFAR10Dataset
+from Trainer.Pruner import Pruner
+from Trainer.Trainer import ModelTrainer
+from utils.Model import ONNXModel, DoubleModel
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
 
@@ -18,8 +21,6 @@ parser.add_argument('--sparsity', default=0.5, type=float, required=False, help=
 parser.add_argument('--model_path', default="./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx", type=str, required=False, help="Model path")
 
 parser.add_argument('--sub_folder', default="a", type=str, required=False, help="Path to subfolder")
-
-
 
 args = parser.parse_args()
 
@@ -37,12 +38,10 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DENSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}.pth"
 SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
 
-TEST = True if 'test' in MODEL_PATH else False
 
-max_epochs = 10
-learning_rate = 0.001
-train_first = True
-n_rounds = 10
+TRAIN_FIRST = True
+ROUNDS = 1
+DOUBLE = False
 
 def set_seed(seed):
 
@@ -57,30 +56,32 @@ def train_model(nn_model, n_rounds):
     train_loader = MNISTDataset(train=True, batch_size=64).get_data()
     test_loader = MNISTDataset(train=False, batch_size=64).get_data()
 
-    if not train_first:
+    if not TRAIN_FIRST:
         print("Not using trained network")
         nn_model.apply(initialize_weights)
 
+    if DOUBLE:
+        print("Doubling Model")
+        nn_model = DoubleModel(nn_model.layers)
+        print(nn_model)
+
     nn_model = nn_model.to(device=DEVICE)
 
-    trainer = ModelTrainer(nn_model, max_epochs=100, learning_rate= 1e-2, device=DEVICE)
+    trainer = ModelTrainer(max_epochs=1, learning_rate= 1e-2, device=DEVICE)
 
-    print(trainer.calculate_score(test_loader))
-    #print(trainer.calculate_score(train_loader))
+    print("Accuracy before training: ", trainer.calculate_score(nn_model, test_loader))
 
     initial_weights = deepcopy(nn_model.state_dict())
     total_parameters = nn_model.count_parameters()
-    prune_pc_per_round = 1 - (1 - SPARSITY) ** (1 / n_rounds)
-
-    # print(nn_model.get_weights())
+    prune_pc_per_round = 1 - (1 - SPARSITY) ** (1 / ROUNDS)
 
     print("Total Params:", total_parameters)
 
-    for round in range(n_rounds):
-        print(f"\nPruning round {round} of {n_rounds}")
+    for round in range(ROUNDS):
+        print(f"\nPruning round {round} of {ROUNDS}")
 
         # Fit the model to the training data
-        trainer.train(train_loader)
+        trainer.train(nn_model, train_loader)
 
         pruned_model = Pruner(model=nn_model, sparsity=prune_pc_per_round).prune().get_model()
 
@@ -90,26 +91,15 @@ def train_model(nn_model, n_rounds):
         # print(f"Model accuracy: {accuracy:.3f}%")
         # print(f"New parameters: {n_pruned_parameters}/{total_parameters}")
 
-    trainer = ModelTrainer(nn_model, max_epochs=200, learning_rate=1e-3, device=DEVICE)
+    trainer = ModelTrainer(max_epochs=1, learning_rate=1e-3, device=DEVICE)
+    trainer.train(nn_model, train_loader)
 
-    trainer.train(train_loader)
-
-    # Train final model
-    test_score = trainer.calculate_score(test_loader)
-
-    print(test_score)
-
-    #trainer.train(train_loader)
     nn_model.apply_mask()
 
-    validation_score = trainer.calculate_score(test_loader)
-
-    print(validation_score)
-
-    # print(nn_model.get_weights())
+    test_score = trainer.calculate_score(nn_model, test_loader)
 
     nn_model = nn_model.to("cpu")
-    return nn_model, validation_score
+    return nn_model, test_score
 
 def dense_model_train():
 
@@ -134,6 +124,9 @@ start = time.time()
 
 dense_model = dense_model_train()
 
+print(dense_model)
+
+
 if os.path.exists(DENSE_PATH):
     print(f"The file {DENSE_PATH} exists.")
 
@@ -146,10 +139,7 @@ if os.path.exists(DENSE_PATH):
     # Compare the state dictionaries
     state_dicts_equal = all(torch.equal(current_state_dict[key], loaded_state_dict[key]) for key in current_state_dict)
 
-    if state_dicts_equal:
-        print("The model state dictionary is the same as in the file.")
-    else:
-        print("The model state dictionary is different from the one in the file.")
+    assert state_dicts_equal == True
 
 else:
         # Save the model state dictionary
@@ -162,20 +152,12 @@ else:
 
 sparse_model = None
 
-if not TEST:
+sparse_model, validation_score = train_model(dense_model_train(), n_rounds=n_rounds)
 
-    sparse_model, validation_score = train_model(dense_model_train(), n_rounds=n_rounds)
+torch.save(sparse_model.state_dict(), SPARSE_PATH)
 
-    torch.save(sparse_model.state_dict(), SPARSE_PATH)
-
-    print(validation_score)
-
-else:
-
-    sparse_model = dense_model_train()
-
-
-print(dense_model.count_parameters())
-print(sparse_model.count_parameters())
-
-print(time.time() - start)
+print("\n----------------------\n")
+print("Test score: ", validation_score)
+print("Dense # Parameters: ", dense_model.count_parameters())
+print("Sparse # Parameters: ", sparse_model.count_parameters())
+print("Total time training: ", time.time() - start)

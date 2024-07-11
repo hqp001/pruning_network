@@ -7,3 +7,5 @@ MNIST/
 vnncomp2022_benchmarks/
 vnncomp2022_results
 log/
+.analyze/
+CIFAR10/

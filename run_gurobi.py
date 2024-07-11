@@ -1,14 +1,15 @@
-import torch
-import pandas as pd
-from Model import ONNXModel
-from onnx2torch import convert
-import onnx
-import numpy as np
-import random
 import os
-from gurobi_MNIST import solve_with_gurobi_and_record
+import random
 import argparse
+
+import torch
+import numpy as np
+import onnx
+from onnx2torch import convert
 from vnnlib.compat import read_vnnlib_simple
+
+from utils.Model import ONNXModel, DoubleModel
+from Solver.guro
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
 parser.add_argument('--sparsity',
@@ -24,7 +25,7 @@ parser.add_argument('--model_path',
 parser.add_argument('--instance_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_12_0.05.vnnlib",
+        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_1_0.03.vnnlib",
         help='Path to the instance file')
 parser.add_argument('--time_limit',
         type=int,
@@ -39,7 +40,7 @@ parser.add_argument('--output_path',
 parser.add_argument('--subfolder',
         type=str,
         required=False,
-        default="sparse_std",
+        default="sgd_trained_0.5",
         help="Subfolder name")
 parser.add_argument('--callback',
         type=str,
@@ -59,48 +60,42 @@ ONNX_PATH = f"{args.model_path}"
 INSTANCE_PATH = f"{args.instance_path}"
 OUTPUT_PATH = f"{args.output_path}"
 
-
-TEST = True if 'test' in ONNX_PATH else False
-SUBFOLDER = "test" if TEST else args.subfolder
+SUBFOLDER = args.subfolder
 
 MODEL_NAME, _ = os.path.splitext(os.path.basename(ONNX_PATH))
 LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}"
 DENSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}.pth"
 SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
 
+DOUBLE = False
+
 CALLBACK = args.callback
 
-def run_gurobi(model, dense_model, input):
+def run_gurobi(sparse_model, dense_model, input):
 
-    image_range = input[0]
-
+    input_range = input[0]
     output_range = input[1]
 
-    first_image = []
+    lb_image = np.array([i[0] for i in input_range]).reshape(1, 28, 28)
+    ub_image = np.array([i[1] for i in input_range]).reshape(1, 28, 28)
 
-    for i in image_range:
+    random_image = torch.tensor((lb_image + ub_image) / 2, dtype=torch.float32)
 
-        first_image.append((image_range[0][1] + image_range[0][0]) / 2)
-
-    #print(first_image)
-
-    ex_prob = model.forward(torch.tensor(first_image))
+    ex_prob = dense_model.forward(random_image)
 
     top2_value, top2_index = torch.topk(ex_prob, 2)
 
     correct_label = np.argmax(output_range[0][0][0])
 
-    #print(correct_label)
-
     wrong_label = None
 
-    if top2_index[0].item() != correct_label:
-        wrong_label = top2_index[0].item()
+    if top2_index[0][0].item() != correct_label:
+        wrong_label = top2_index[0][0].item()
 
     else:
-        wrong_label = top2_index[1].item()
+        wrong_label = top2_index[0][1].item()
 
-    x_max, max_, time_count = solve_with_gurobi_and_record(model, dense_model, image_range, output_range, TIME_LIMIT, correct_label, wrong_label, CALLBACK)
+    x_max, max_, time_count = solve_with_gurobi(sparse, dense_model, input_range, output_range, TIME_LIMIT, correct_label, wrong_label, CALLBACK)
 
     # print(x_max, max_, time_count)
     #print(max_, time_count, correct_label, wrong_label)
@@ -112,6 +107,9 @@ def import_model(file_name):
 
     torch_model = ONNXModel(onnx_model)
 
+    if DOUBLE:
+        torch_model = DoubleModel(torch_model.layers)
+
     torch_model.load_state_dict(torch.load(file_name))
 
     return torch_model
@@ -119,6 +117,10 @@ def import_model(file_name):
 def get_image(file_name):
 
     result = read_vnnlib_simple(file_name, 784, 10)
+
+    #print(torch.tensor([i[0] for i in result[0][0]])
+
+    #print(aa)
 
     return result[0][0], result[0][1]
 
@@ -144,24 +146,28 @@ def print_result_to_file(result, x_max, y_max):
 SPARSE_PATH = DENSE_PATH if SPARSITY == 0 else SPARSE_PATH
 
 dense_model = import_model(DENSE_PATH)
+
 sparse_model = import_model(SPARSE_PATH)
 
-print(dense_model.count_parameters())
-print(sparse_model.count_parameters())
+print("Dense # Params: ", dense_model.count_parameters())
+print("Sparse # Params: ", sparse_model.count_parameters())
 
 x_max, _max, time_count, correct_label, wrong_label = run_gurobi(sparse_model, dense_model, get_image(INSTANCE_PATH))
 
 if x_max != None:
-
     dense_model.eval()
     sparse_model.eval()
     with torch.no_grad():
         dense_output = torch.argmax(dense_model.forward(torch.tensor(x_max))).item()
+
 else:
     dense_output = None
 
+
 if dense_output != None and dense_output != correct_label:
-    print_result_to_file("sat", x_max, dense_model.forward(torch.tensor(x_max)).tolist())
+    y_max = dense_model.forward(torch.tensor(x_max)).tolist()
+    print_result_to_file("sat", x_max, y_max)
+
 else:
     print_result_to_file("unsat", None, None)
 
