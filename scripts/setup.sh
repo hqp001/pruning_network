@@ -26,4 +26,6 @@ install_repo() {
 install_repo $BENCHMARK_URL $BENCHMARK_FOLDER
 install_repo $RESULTS_URL $RESULTS_FOLDER
 
+${BENCHMARK_FOLDER}/setup.sh
+
 echo "Complete setup"
