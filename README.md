@@ -4,6 +4,7 @@
 
 ```bash
 ./scripts/setup.sh
+```
 
 ## Folders and Files
 
