@@ -1,11 +1,13 @@
 #!/bin/bash
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BENCHMARK_FOLDER="$SCRIPT_DIR/../vnncomp2022_benchmarks"
+RESULTS_FOLDER="$SCRIPT_DIR/../vnncomp2022_results"
+
 # Set the repository URL
 BENCHMARK_URL="https://github.com/ChristopherBrix/vnncomp2022_benchmarks.git"
-BENCHMARK_FOLDER="./vnncomp2022_benchmarks"
 
 RESULTS_URL="https://github.com/ChristopherBrix/vnncomp2022_results.git"
-RESULTS_FOLDER="./vnncomp2022_results"
 
 install_repo() {
     local repo_url="$1"
@@ -21,9 +23,7 @@ install_repo() {
 
 }
 
-pip install -r ./requirements.txt
 install_repo $BENCHMARK_URL $BENCHMARK_FOLDER
 install_repo $RESULTS_URL $RESULTS_FOLDER
-gunzip ./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/*.gz ./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/*.gz
 
 echo "Complete setup"
