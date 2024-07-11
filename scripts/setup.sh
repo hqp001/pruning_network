@@ -28,6 +28,8 @@ install_repo $RESULTS_URL $RESULTS_FOLDER
 
 echo "Finish downloading benchmarks"
 
+echo "Unzipping files. Please wait..."
+
 gunzip ${BENCHMARK_FOLDER}/benchmarks/*/onnx/* ${BENCHMARK_FOLDER}/benchmarks/*/vnnlib/*
 
 echo "Complete setup"
