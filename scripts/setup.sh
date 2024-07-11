@@ -26,6 +26,6 @@ install_repo() {
 install_repo $BENCHMARK_URL $BENCHMARK_FOLDER
 install_repo $RESULTS_URL $RESULTS_FOLDER
 
-${BENCHMARK_FOLDER}/setup.sh
+gunzip benchmarks/*/onnx/* benchmarks/*/vnnlib/*
 
 echo "Complete setup"
