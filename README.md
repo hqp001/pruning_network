@@ -1,5 +1,10 @@
 # Pruning Gurobi MNIST
 
+## How to setup:
+
+```bash
+./scripts/setup.sh
+
 ## Folders and Files
 
 - **Solver/**: Contains all solver-related files used in the project.
