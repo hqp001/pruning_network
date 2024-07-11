@@ -1,45 +1,12 @@
 import torch
-from Model import SimpleNN
-import gurobipy as gp
 import numpy as np
-
-def load_data(file_path):
-
-    loaded_data = np.load(file_path)
-    n_layers = loaded_data['arr_0']
-    n_weights = loaded_data['arr_1']
-    acc = loaded_data['arr_2']
-    neurons = []
-    weights = []
-    abs_weights = []
-
-    for i in range(n_layers):
-        neurons.append(loaded_data[f'arr_{i + 3}'])
-
-    for i in range(n_weights):
-        weights.append(loaded_data[f'arr_{i + 3 + n_layers}'])
-
-    for i in range(n_weights):
-        abs_weights.append(loaded_data[f'arr_{i + 3 + n_layers + n_weights}'])
-
-    return neurons
-
-
-#data = load_data(f"./neuron/sgd_trained_mnist-net_256x{model_name}_0.0.npz")
+import gurobipy as gp
 
 def add_predictor_constr(gurobi_model, nn_model, x, y):
 
     sequential = []
 
-    #neuron_constr_list = []
-
     sequential.append(x)
-
-    n_relu = 0
-    for idx, layer in enumerate(nn_model.layers):
-        n_relu += isinstance(layer, torch.nn.ReLU)
-
-    #neuron_data = load_data(f"./neuron/sgd_trained_mnist-net_256x{n_relu}_0.0.npz")
 
     for idx, layer in enumerate(nn_model.layers):
         if (isinstance(layer, torch.nn.Linear)):
@@ -48,34 +15,30 @@ def add_predictor_constr(gurobi_model, nn_model, x, y):
             sequential.append(linear)
 
         elif (isinstance(layer, torch.nn.ReLU)):
-            relu, neuron_constr = add_relu_constr(gurobi_model, sequential[-1], name = f"relu_{idx}")
+            relu = add_relu_constr(gurobi_model, sequential[-1], name = f"relu_{idx}")
 
             sequential.append(relu)
 
-            #print(layer, idx)
-            #neuron_var = gurobi_model.addVar(vtype=gp.GRB.BINARY, name="neuron_constr")
-            #gurobi_model.addConstr((neuron_var == 1) >> (neuron_constr <= 2))
-            #neuron_constr_list.append(neuron_var)
-
-        elif (isinstance(layer, torch.nn.Conv2d)):
-
-            pass
-
         elif (isinstance(layer, torch.nn.Softmax)):
+            # Skipping Softmax layer
             pass
+
+        elif (isinstance(layer, torch.nn.Flatten)):
+
+            flatten = add_flatten_constr(gurobi_model, sequential[-1], layer.start_dim, layer.end_dim, f"flattend_{idx}")
+
+            sequential.append(flatten)
 
         else:
-            raise ValueError("Unknown Layer")
-
-    #gurobi_model.addConstr(gp.quicksum(neuron_constr_list) >= 1)
+            raise ValueError(f"Unknown Layer: {type(layer)}")
 
     output = sequential[-1]
 
     assert(y.size == output.size)
 
-    for i in range(y.size):
+    for i in range(y.shape[1]):
 
-        gurobi_model.addConstr(output[i] == y[i])
+        gurobi_model.addConstr(output[0][i] == y[0][i])
 
     return y
 
@@ -116,62 +79,30 @@ def add_relu_constr2(gurobi_model, input_layer, name):
 
 def add_relu_constr(gurobi_model, input_layer, name):
 
-    input_size = input_layer.size
+    input_size = input_layer.shape
 
     neuron_layer = gurobi_model.addMVar(input_size, vtype=gp.GRB.BINARY, name = f"neuron_{name}")
 
     output_layer = gurobi_model.addMVar(input_size, name=name)
-    neuron_sum = 0
-    for j in range(input_size):
-        gurobi_model.addConstr( (neuron_layer[j] == 0) >> (input_layer[j] <= 0) )
-        gurobi_model.addConstr( (neuron_layer[j] == 0) >> (output_layer[j] == 0) )
-        gurobi_model.addConstr( (neuron_layer[j] == 1) >> (output_layer[j] == input_layer[j]) )
-        gurobi_model.addConstr( output_layer[j] >= 0 )
-        neuron_sum += neuron_layer[j]
+    for j in range(input_size[1]):
+        gurobi_model.addConstr( (neuron_layer[0][j] == 0) >> (input_layer[0][j] <= 0) )
+        gurobi_model.addConstr( (neuron_layer[0][j] == 0) >> (output_layer[0][j] == 0) )
+        gurobi_model.addConstr( (neuron_layer[0][j] == 1) >> (output_layer[0][j] == input_layer[0][j]) )
+        gurobi_model.addConstr( output_layer[0][j] >= 0 )
 
 
-    return output_layer, neuron_sum
+    return output_layer
 
-def score(a):
+def add_flatten_constr(gurobi_model, input_layer, start_dim, end_dim, name):
 
-    return 100 - int(abs(a - 0.5) * 100) - 50
+    if end_dim < 0:
+        end_dim = input_layer.ndim + end_dim
 
-def add_relu_constr3(gurobi_model, input_layer, neuron_freq, name):
+    flatten_shape = 1
+    for dim in range(start_dim, end_dim + 1):
+        flatten_shape *= input_layer.shape[dim]
 
-    input_size = input_layer.size
+    new_shape = input_layer.shape[:start_dim] + (flatten_shape,) + input_layer.shape[end_dim + 1:]
 
-    neuron_layer = gurobi_model.addMVar(input_size, vtype=gp.GRB.BINARY, name = f"neuron_{name}")
-
-    output_layer = gurobi_model.addMVar(input_size, name=name)
-    neuron_sum = 0
-    for j in range(input_size):
-        print(j, neuron_freq[j], score(neuron_freq[j]))
-        gurobi_model.addConstr( (neuron_layer[j] == 0) >> (input_layer[j] <= 0) )
-        gurobi_model.addConstr( (neuron_layer[j] == 0) >> (output_layer[j] == 0) )
-        gurobi_model.addConstr( (neuron_layer[j] == 1) >> (output_layer[j] == input_layer[j]) )
-        gurobi_model.addConstr( output_layer[j] >= 0 )
-        neuron_layer[j].BranchPriority = score(neuron_freq[j])
-        neuron_sum += neuron_layer[j]
-
-
-    return output_layer, neuron_sum
-
-def test():
-
-    torch.manual_seed(70)
-
-    nn_model = SimpleNN()
-
-    gurobi_model = gp.Model()
-
-    x = gurobi_model.addMVar(4, name="x")
-    y = gurobi_model.addMVar(10, name="y")
-
-    add_predictor_constr(gurobi_model, nn_model, x, y)
-
-    gurobi_model.update()
-
-    print(gurobi_model.getVars())
-
-    gurobi_model.write("model.lp")
+    return input_layer.reshape(new_shape)
 

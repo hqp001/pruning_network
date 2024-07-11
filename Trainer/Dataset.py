@@ -11,7 +11,7 @@ class MNISTDataset:
             transforms.ToTensor(),
         ])
 
-        self.data = torchvision.datasets.MNIST(root="../", train=train, download=True, transform=transform)
+        self.data = torchvision.datasets.MNIST(root="./", train=train, download=True, transform=transform)
 
         self.loader = DataLoader(self.data, batch_size=batch_size, shuffle=False, num_workers=2)
 
@@ -31,7 +31,7 @@ class CIFAR10Dataset:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.225, 0.225, 0.225]),
         ])
 
-        self.data = torchvision.datasets.CIFAR10(root="../CIFAR10", train=train, download=True, transform=transform)
+        self.data = torchvision.datasets.CIFAR10(root="./", train=train, download=True, transform=transform)
 
         self.loader = DataLoader(self.data, batch_size=batch_size, shuffle=False, num_workers=2)
 

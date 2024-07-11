@@ -9,7 +9,7 @@ from onnx2torch import convert
 from vnnlib.compat import read_vnnlib_simple
 
 from utils.Model import ONNXModel, DoubleModel
-from Solver.guro
+from Solver.GurobiSolver import solve_with_gurobi
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
 parser.add_argument('--sparsity',
@@ -78,24 +78,14 @@ def run_gurobi(sparse_model, dense_model, input):
 
     lb_image = np.array([i[0] for i in input_range]).reshape(1, 28, 28)
     ub_image = np.array([i[1] for i in input_range]).reshape(1, 28, 28)
-
-    random_image = torch.tensor((lb_image + ub_image) / 2, dtype=torch.float32)
-
-    ex_prob = dense_model.forward(random_image)
-
-    top2_value, top2_index = torch.topk(ex_prob, 2)
-
     correct_label = np.argmax(output_range[0][0][0])
 
-    wrong_label = None
+    random_image = torch.tensor((lb_image + ub_image) / 2, dtype=torch.float32)
+    ex_prob = dense_model.forward(random_image)
+    top2_value, top2_index = torch.topk(ex_prob, 2)
+    wrong_label = top2_index[0][1].item()
 
-    if top2_index[0][0].item() != correct_label:
-        wrong_label = top2_index[0][0].item()
-
-    else:
-        wrong_label = top2_index[0][1].item()
-
-    x_max, max_, time_count = solve_with_gurobi(sparse, dense_model, input_range, output_range, TIME_LIMIT, correct_label, wrong_label, CALLBACK)
+    x_max, max_, time_count = solve_with_gurobi(sparse_model, dense_model, [lb_image, ub_image], correct_label, wrong_label, TIME_LIMIT, CALLBACK)
 
     # print(x_max, max_, time_count)
     #print(max_, time_count, correct_label, wrong_label)
@@ -134,7 +124,7 @@ def set_seed(seed):
 def print_result_to_file(result, x_max, y_max):
     with open(OUTPUT_PATH, "w") as f:
         f.write(result + "\n")
-        if x_max != None:
+        if x_max is not None:
             f.write("(")
             for idx, value in enumerate(x_max):
                 f.write(f"(X_{idx} {value})\n")
@@ -154,19 +144,19 @@ print("Sparse # Params: ", sparse_model.count_parameters())
 
 x_max, _max, time_count, correct_label, wrong_label = run_gurobi(sparse_model, dense_model, get_image(INSTANCE_PATH))
 
-if x_max != None:
+if x_max is not None:
     dense_model.eval()
     sparse_model.eval()
     with torch.no_grad():
-        dense_output = torch.argmax(dense_model.forward(torch.tensor(x_max))).item()
+        dense_output = torch.argmax(dense_model.forward(torch.tensor(x_max, dtype=torch.float32))).item()
 
 else:
     dense_output = None
 
 
 if dense_output != None and dense_output != correct_label:
-    y_max = dense_model.forward(torch.tensor(x_max)).tolist()
-    print_result_to_file("sat", x_max, y_max)
+    y_max = dense_model.forward(torch.tensor(x_max, dtype=torch.float32)).detach().numpy()
+    print_result_to_file("sat", x_max.reshape(-1), y_max.reshape(-1))
 
 else:
     print_result_to_file("unsat", None, None)

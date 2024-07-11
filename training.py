@@ -49,7 +49,7 @@ def set_seed(seed):
     torch.manual_seed(seed)
     random.seed(seed)
 
-def train_model(nn_model, n_rounds):
+def train_model(nn_model):
 
     print("Device to train: ", DEVICE)
 
@@ -152,7 +152,7 @@ else:
 
 sparse_model = None
 
-sparse_model, validation_score = train_model(dense_model_train(), n_rounds=n_rounds)
+sparse_model, validation_score = train_model(dense_model_train())
 
 torch.save(sparse_model.state_dict(), SPARSE_PATH)
 

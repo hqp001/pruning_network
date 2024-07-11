@@ -11,12 +11,4 @@
 
 module load gurobi-optimizer
 
-python count_neurons.py --digit 1
-python count_neurons.py --digit 2
-python count_neurons.py --digit 3
-python count_neurons.py --digit 4
-python count_neurons.py --digit 5
-python count_neurons.py --digit 6
-python count_neurons.py --digit 7
-python count_neurons.py --digit 8
-python count_neurons.py --digit 9
+./scripts/run_gurobi_MNIST.sh 0.5 sgd_trained none

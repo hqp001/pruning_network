@@ -4,6 +4,7 @@ pytorch_model/
 __pycache__/
 myenv/
 MNIST/
+out.txt
 vnncomp2022_benchmarks/
 vnncomp2022_results
 log/
