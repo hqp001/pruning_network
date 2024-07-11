@@ -27,7 +27,19 @@
 
 ## How to Run the Scripts
 
-### Running the Solver
+### Running the Trainer
+
+You have to run the training first to train the sparse model
+
+```bash
+# Using Python script
+python training.py
+
+# or
+
+sbatch bisonnet-template_gpu.sh # on Bisonnet
+```
+
 
 To run the solver, you can either execute the `run_gurobi.py` script or use the `bisonnet-template_cpu.sh` script in the main directory. 
 
@@ -41,3 +53,4 @@ python run_gurobi.py
 # or
 
 sbatch bisonnet-template_cpu.sh # on Bisonnet
+```
