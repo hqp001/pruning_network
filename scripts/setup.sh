@@ -17,7 +17,7 @@ install_repo() {
     else
         echo "The folder '$folder_name' does not exist."
         echo "Cloning the repository..."
-        git clone "$repo_url"
+        git clone "$repo_url" --depth 1
         echo "Operation completed."
     fi
 
@@ -26,6 +26,8 @@ install_repo() {
 install_repo $BENCHMARK_URL $BENCHMARK_FOLDER
 install_repo $RESULTS_URL $RESULTS_FOLDER
 
-gunzip benchmarks/*/onnx/* benchmarks/*/vnnlib/*
+echo "Finish downloading benchmarks"
+
+gunzip ${BENCHMARK_FOLDER}/benchmarks/*/onnx/* ${BENCHMARK_FOLDER}/benchmarks/*/vnnlib/*
 
 echo "Complete setup"
