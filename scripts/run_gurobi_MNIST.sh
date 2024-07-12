@@ -74,7 +74,7 @@ done
 
 cd ${FOLDER_PATH} || exit
 
-${BENCHMARK_FOLDER}/run_all_categories.sh v1 "${FOLDER_PATH}/scripts" ${BENCHMARK_FOLDER} ${FOLDER_PATH}/results.csv ${FOLDER_PATH} $CATEGORY first
+${BENCHMARK_FOLDER}/run_all_categories.sh v1 "${FOLDER_PATH}/scripts" ${BENCHMARK_FOLDER} ${FOLDER_PATH}/results.csv ${FOLDER_PATH} $CATEGORY all
 
 for SOURCE_ITEM in "${ITEMS_TO_COPY[@]}"; do
 

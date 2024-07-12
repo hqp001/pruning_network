@@ -40,7 +40,7 @@ SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
 
 
 TRAIN_FIRST = True
-ROUNDS = 1
+ROUNDS = 10
 DOUBLE = False
 
 def set_seed(seed):

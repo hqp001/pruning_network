@@ -11,4 +11,4 @@
 
 module load gurobi-optimizer
 
-./scripts/run_gurobi_MNIST.sh 0.5 sgd_trained none
+./scripts/run_gurobi_MNIST.sh 0.8 sgd_trained dense_passing
