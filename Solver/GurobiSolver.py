@@ -14,15 +14,11 @@ def dense_passing(model, where):
 
         print("Found a solution")
 
-        variables = model.getVars()
+        input_sol = model.cbGetSolution(model._input)
 
-        input_variables = [var for var in variables if var.VarName.startswith("x")]
+        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol, dtype=torch.float32))).item()
 
-        input_sol = [model.cbGetSolution(var) for var in input_variables]
-
-        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol))).item()
-
-        if dense_output != model._right_label:
+        if dense_output != model._correct_label:
             print("Stopping the optimization...")
             model._x_max_sol = input_sol
             model.terminate()
@@ -41,9 +37,9 @@ def remove_region(model, where):
 
         dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol))).item()
 
-        print("Dense output: ", dense_output, model._right_label)
+        print("Dense output: ", dense_output, model._correct_label)
 
-        if dense_output != model._right_label:
+        if dense_output != model._correct_label:
             model._x_max_sol = input_sol
             print("Terminating the model")
             model.terminate()
@@ -72,16 +68,12 @@ def remove_region(model, where):
 
 def solve_with_gurobi(nn_regression, dense_model, image_range, correct_label, wrong_label, time_limit, callback):
 
-    m = gp.Model()
-
-    m._network = dense_model
-    m._right_label = correct_label
-    m._x_max_sol = None
-
-    m.setParam('OutputFlag', 1)
-
     lb_image = image_range[0]
     ub_image = image_range[1]
+
+    m = gp.Model()
+    m.setParam('OutputFlag', 1)
+    m.setParam('TimeLimit', time_limit)
 
     x = m.addMVar(lb_image.shape, lb=lb_image, ub=ub_image, name="x")
     y = m.addMVar((1, 10), lb=-gp.GRB.INFINITY, name="y")
@@ -90,7 +82,10 @@ def solve_with_gurobi(nn_regression, dense_model, image_range, correct_label, wr
 
     m.setObjective(y[0][wrong_label] - y[0][correct_label], gp.GRB.MAXIMIZE)
 
-    m.setParam('TimeLimit', time_limit)
+    m._network = dense_model
+    m._correct_label = correct_label
+    m._x_max_sol = None
+    m._input = x
 
     if callback == "none":
         # Add these contraints if neccessary
