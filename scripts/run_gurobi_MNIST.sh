@@ -30,14 +30,14 @@ export FOLDER_PATH
 
 if [ -d "$FOLDER_PATH" ]; then
     echo "Error: The directory '$FOLDER_PATH' already exists."
+    rm -r $FOLDER_PATH || exit
+fi
+
+mkdir "$FOLDER_PATH"
+if [ $? -eq 0 ]; then
+    echo "Directory '$FOLDER_PATH' created successfully."
 else
-    # Attempt to create the directory
-    mkdir "$FOLDER_PATH"
-    if [ $? -eq 0 ]; then
-        echo "Directory '$FOLDER_PATH' created successfully."
-    else
-        echo "Failed to create directory '$FOLDER_PATH'. Check permissions or directory path."
-    fi
+    echo "Failed to create directory '$FOLDER_PATH'. Check permissions or directory path."
 fi
 
 ITEMS_TO_COPY=(
@@ -46,13 +46,19 @@ ITEMS_TO_COPY=(
     "Solver"
     "scripts/run_instance.sh"
     "scripts/prepare_instance.sh"
+    "utils"
 )
-
 
 for SOURCE_ITEM in "${ITEMS_TO_COPY[@]}"; do
 
   if [ -e "$SOURCE_ITEM" ]; then
-    cp -r "${MAIN_FOLDER}/${SOURCE_ITEM}" "${FOLDER_PATH}"
+
+    SOURCE_DIR=$(dirname "$SOURCE_ITEM")
+    DESTINATION_DIR="${FOLDER_PATH}/${SOURCE_DIR}"
+    echo $DESTINATION_DIR
+    mkdir -p "$DESTINATION_DIR"
+
+    cp -r "${MAIN_FOLDER}/${SOURCE_ITEM}" "$DESTINATION_DIR" || exit
 
     if [ $? -eq 0 ]; then
       echo "Copied: $SOURCE_ITEM"
@@ -68,26 +74,29 @@ done
 
 cd ${FOLDER_PATH} || exit
 
-${BENCHMARK_FOLDER}/run_all_categories.sh v1 ${SCRIPT_DIR} ${BENCHMARK_FOLDER} ${FOLDER_PATH}/results.csv ${FOLDER_PATH} $CATEGORY all
+${BENCHMARK_FOLDER}/run_all_categories.sh v1 "${FOLDER_PATH}/scripts" ${BENCHMARK_FOLDER} ${FOLDER_PATH}/results.csv ${FOLDER_PATH} $CATEGORY first
 
 for SOURCE_ITEM in "${ITEMS_TO_COPY[@]}"; do
-  # Determine the path of the copied item in the destination folder
-  DESTINATION_ITEM="${FOLDER_PATH}/${SOURCE_ITEM}"
 
-  # Check if the destination item exists
-  if [ -e "$DESTINATION_ITEM" ]; then
-    # Remove the destination item
-    rm -r "$DESTINATION_ITEM"
+    SOURCE_DIR=$(dirname "$SOURCE_ITEM")
+    DESTINATION_ITEM="${FOLDER_PATH}/${SOURCE_ITEM}"
 
-    # Check if the deletion was successful
-    if [ $? -eq 0 ]; then
-      echo "Deleted: $DESTINATION_ITEM"
+    if [ -e "$DESTINATION_ITEM" ]; then
+
+        rm -r "$DESTINATION_ITEM"
+
+        if [ $? -eq 0 ]; then
+            echo "Deleted: $DESTINATION_ITEM"
+        else
+            echo "Error deleting: $DESTINATION_ITEM"
+        fi
+
     else
-      echo "Error deleting: $DESTINATION_ITEM"
+        echo "Destination item does not exist: $DESTINATION_ITEM"
     fi
-  else
-    echo "Destination item does not exist: $DESTINATION_ITEM"
-  fi
+
+    find "${FOLDER_PATH}/$SOURCE_DIR" -type d -empty -delete
+
 done
 
 
