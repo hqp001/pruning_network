@@ -12,10 +12,10 @@
 
 module load gurobi-optimizer
 
-SPARSITY=0.5
+SPARSITY=0.9
 SUBFOLDER="sgd_trained"
 
 python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx" --sub_folder $SUBFOLDER
-#python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x4.onnx" --sub_folder $SUBFOLDER
-#python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x6.onnx" --sub_folder $SUBFOLDER
+python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x4.onnx" --sub_folder $SUBFOLDER
+python training.py --sparsity $SPARSITY --model_path "./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x6.onnx" --sub_folder $SUBFOLDER
 
