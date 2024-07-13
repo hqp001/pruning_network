@@ -5,7 +5,6 @@ import torchvision
 import numpy as np
 
 import gurobipy as gp
-#from gurobi_ml import add_predictor_constr
 from .torch2gurobi import add_predictor_constr
 
 def dense_passing(model, where):
@@ -31,11 +30,9 @@ def remove_region(model, where):
 
         variables = model.getVars()
 
-        input_variables = [var for var in variables if var.VarName.startswith("x")]
+        input_sol = model.cbGetSolution(model._input)
 
-        input_sol = [model.cbGetSolution(var) for var in input_variables]
-
-        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol))).item()
+        dense_output = torch.argmax(model._network.forward(torch.tensor(input_sol, dtype=torch.float32))).item()
 
         print("Dense output: ", dense_output, model._correct_label)
 
@@ -44,22 +41,14 @@ def remove_region(model, where):
             print("Terminating the model")
             model.terminate()
 
-        neuron_variables = [var for var in variables if var.VarName.startswith("neuron")]
-
-
-        neuron_sol = [model.cbGetSolution(var) for var in neuron_variables]
+        neuron_sol = [model.cbGetSolution(var) for var in model._binary]
 
         added_constr = 0
 
-        #print(neuron_variables)
-
         for i in range(len(neuron_sol)):
-            if (neuron_sol[i] <= 0.5):
-                added_constr += neuron_variables[i]
-            else:
-                added_constr += (1 - neuron_variables[i])
-
-        #print(added_constr)
+            neuron_val = np.where(neuron_sol[i] >= 0.5, -1, 1).reshape(1, -1)
+            added_constr += (model._binary[i].reshape(1, -1) @ neuron_val.T).item()
+            added_constr += np.sum(neuron_val == -1)
 
         model.cbLazy(added_constr >= 1)
 
@@ -74,18 +63,21 @@ def solve_with_gurobi(nn_regression, dense_model, image_range, correct_label, wr
     m = gp.Model()
     m.setParam('OutputFlag', 1)
     m.setParam('TimeLimit', time_limit)
+    m.setParam('Threads', 1)
 
     x = m.addMVar(lb_image.shape, lb=lb_image, ub=ub_image, name="x")
     y = m.addMVar((1, 10), lb=-gp.GRB.INFINITY, name="y")
-
-    add_predictor_constr(m, nn_regression, x, y)
-
-    m.setObjective(y[0][wrong_label] - y[0][correct_label], gp.GRB.MAXIMIZE)
 
     m._network = dense_model
     m._correct_label = correct_label
     m._x_max_sol = None
     m._input = x
+    m._binary = []
+
+    add_predictor_constr(m, nn_regression, x, y)
+
+    m.setObjective(y[0][wrong_label] - y[0][correct_label], gp.GRB.MAXIMIZE)
+
 
     if callback == "none":
         # Add these contraints if neccessary
@@ -102,7 +94,6 @@ def solve_with_gurobi(nn_regression, dense_model, image_range, correct_label, wr
 
     else:
         raise ValueError(f"Callback {callback} doesn't exist")
-
 
     if m.status == 4:
         print(f'Model is infeasible or unbounded')

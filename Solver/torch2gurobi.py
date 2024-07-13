@@ -19,6 +19,13 @@ def add_predictor_constr(gurobi_model, nn_model, x, y):
 
             sequential.append(relu)
 
+        elif (isinstance(layer, torch.nn.Conv2d)):
+            conv = add_conv2d_constr(gurobi_model, sequential[-1], name = f"conv2d_{idx}")
+
+            sequential.append(conv)
+
+            print(aa)
+
         elif (isinstance(layer, torch.nn.Softmax)):
             # Skipping Softmax layer
             pass
@@ -41,6 +48,15 @@ def add_predictor_constr(gurobi_model, nn_model, x, y):
         gurobi_model.addConstr(output[0][i] == y[0][i])
 
     return y
+
+def add_conv2d_constr(gurobi_model, input_layer, name = "conv2d"):
+
+    gurobi_model.update()
+    print(input_layer)
+
+
+
+
 
 def add_linear_constr(gurobi_model, input_layer, weight, bias, name="linear"):
 
@@ -82,6 +98,8 @@ def add_relu_constr(gurobi_model, input_layer, name):
     input_size = input_layer.shape
 
     neuron_layer = gurobi_model.addMVar(input_size, vtype=gp.GRB.BINARY, name = f"neuron_{name}")
+
+    gurobi_model._binary.append(neuron_layer)
 
     output_layer = gurobi_model.addMVar(input_size, name=name)
     for j in range(input_size[1]):

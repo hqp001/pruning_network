@@ -1,9 +1,10 @@
+import math
+
 import torch.nn as nn
 import torch
 import torch.nn.utils.prune as prune
 from onnx2torch.node_converters.matmul import OnnxMatMul
 from onnx2torch import convert
-import math
 
 
 # Neural Network Configuration
@@ -223,9 +224,4 @@ class DoubleModel(SimpleNN):
 
         self.layers = new_layers
         self.model = nn.Sequential(*self.layers)
-
-#import onnx
-
-#model = convert(onnx.load("./vnncomp2022_benchmarks/benchmarks/cifar100_tinyimagenet_resnet/onnx/CIFAR100_resnet_small.onnx"))
-#print(model)
 
