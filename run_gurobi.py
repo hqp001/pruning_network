@@ -108,10 +108,6 @@ def get_image(file_name):
 
     result = read_vnnlib_simple(file_name, 784, 10)
 
-    #print(torch.tensor([i[0] for i in result[0][0]])
-
-    #print(aa)
-
     return result[0][0], result[0][1]
 
 

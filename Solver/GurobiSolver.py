@@ -63,7 +63,6 @@ def solve_with_gurobi(nn_regression, dense_model, image_range, correct_label, wr
     m = gp.Model()
     m.setParam('OutputFlag', 1)
     m.setParam('TimeLimit', time_limit)
-    m.setParam('Threads', 1)
 
     x = m.addMVar(lb_image.shape, lb=lb_image, ub=ub_image, name="x")
     y = m.addMVar((1, 10), lb=-gp.GRB.INFINITY, name="y")
@@ -75,6 +74,9 @@ def solve_with_gurobi(nn_regression, dense_model, image_range, correct_label, wr
     m._binary = []
 
     add_predictor_constr(m, nn_regression, x, y)
+
+    # Add this line to check if the formulation is correct or not
+    # assert check_correct_formulation(m, nn_regression, x, y)
 
     m.setObjective(y[0][wrong_label] - y[0][correct_label], gp.GRB.MAXIMIZE)
 
