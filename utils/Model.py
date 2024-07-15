@@ -197,6 +197,10 @@ class DoubleModel(SimpleNN):
                 new_layers.append(nn.ReLU())
             elif isinstance(layer, nn.Softmax):
                 new_layers.append(nn.Softmax(dim=layer.dim))
+
+            elif isinstance(layer, nn.Flatten):
+                new_layers.append(layer)
+
             elif isinstance(layer, nn.Linear):
                 in_features = layer.in_features
                 out_features = layer.out_features

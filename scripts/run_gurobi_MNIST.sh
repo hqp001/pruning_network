@@ -9,19 +9,19 @@ MAIN_FOLDER="${SCRIPT_DIR}/.."
 BENCHMARK_FOLDER="${MAIN_FOLDER}/vnncomp2022_benchmarks"
 RESULTS_FOLDER="${MAIN_FOLDER}/vnncomp2022_results"
 
-if [ "$#" -ne 3 ]; then
-    echo "Usage: $0 <sparsity> <subfolder> <callback>"
+if [ "$#" -ne 4 ]; then
+    echo "Usage: $0 <category> <sparsity> <subfolder> <callback>"
     exit 1
 fi
 
 
-SPARSITY=$1
-SUBFOLDER=$2
-CALLBACK=$3
+SPARSITY=$2
+SUBFOLDER=$3
+CALLBACK=$4
 
 FOLDER_NAME="${SUBFOLDER}_${SPARSITY}_${CALLBACK}"
 FOLDER_PATH="${RESULTS_FOLDER}/${FOLDER_NAME}"
-CATEGORY="mnist_fc"
+CATEGORY=$1
 
 export SPARSITY
 export SUBFOLDER

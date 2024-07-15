@@ -20,12 +20,12 @@ parser.add_argument('--sparsity',
 parser.add_argument('--model_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx",
+        default=f"./vnncomp2022_benchmarks/benchmarks/oval21/onnx/cifar_base_kw.onnx",
         help='Path to the model file')
 parser.add_argument('--instance_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_1_0.03.vnnlib",
+        default=f"./vnncomp2022_benchmarks/benchmarks/oval21/vnnlib/cifar_base_kw-img4763-eps0.024705882352941175.vnnlib",
         help='Path to the instance file')
 parser.add_argument('--time_limit',
         type=int,
@@ -40,7 +40,7 @@ parser.add_argument('--output_path',
 parser.add_argument('--subfolder',
         type=str,
         required=False,
-        default="sgd_trained_0.5",
+        default="trained_0.5",
         help="Subfolder name")
 parser.add_argument('--callback',
         type=str,
@@ -67,17 +67,21 @@ LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}"
 DENSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}.pth"
 SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
 
-DOUBLE = False
+DOUBLE = True
 
 CALLBACK = args.callback
+
+INPUT_SIZE = 3072
+OUTPUT_SIZE = 10
+INPUT_SHAPE = (1, 3, 32, 32)
 
 def run_gurobi(sparse_model, dense_model, input):
 
     input_range = input[0]
     output_range = input[1]
 
-    lb_image = np.array([i[0] for i in input_range]).reshape(1, 28, 28)
-    ub_image = np.array([i[1] for i in input_range]).reshape(1, 28, 28)
+    lb_image = np.array([i[0] for i in input_range]).reshape(*INPUT_SHAPE)
+    ub_image = np.array([i[1] for i in input_range]).reshape(*INPUT_SHAPE)
     correct_label = np.argmax(output_range[0][0][0])
 
     random_image = torch.tensor((lb_image + ub_image) / 2, dtype=torch.float32)
@@ -106,7 +110,7 @@ def import_model(file_name):
 
 def get_image(file_name):
 
-    result = read_vnnlib_simple(file_name, 784, 10)
+    result = read_vnnlib_simple(file_name, INPUT_SIZE, OUTPUT_SIZE)
 
     return result[0][0], result[0][1]
 
@@ -142,13 +146,12 @@ x_max, _max, time_count, correct_label, wrong_label = run_gurobi(sparse_model, d
 
 if x_max is not None:
     dense_model.eval()
-    sparse_model.eval()
     with torch.no_grad():
-        dense_output = torch.argmax(dense_model.forward(torch.tensor(x_max, dtype=torch.float32))).item()
+        y_max = dense_model.forward(torch.tensor(x_max, dtype=torch.float32))
+        dense_output = torch.argmax(y_max).item()
 
 else:
     dense_output = None
-
 
 if dense_output != None and dense_output != correct_label:
     y_max = dense_model.forward(torch.tensor(x_max, dtype=torch.float32)).detach().numpy()

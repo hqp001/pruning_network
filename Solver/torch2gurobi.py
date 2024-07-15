@@ -214,11 +214,19 @@ def add_flatten_constr(gurobi_model, input_layer, start_dim, end_dim, name):
 # Assert if gurobi_model formulate correctly
 def check_correct_formulation(gurobi_model, nn_model, x, y):
 
-    input_shape = x.shape
-    random_input = torch.randn(*input_shape)
-    input_constr = gurobi_model.addConstr(x == random_input.numpy())
-
     gurobi_model.update()
+
+    input_shape = x.shape
+
+    lower_bound = np.nan_to_num(x.lb.astype(np.float32), copy=True, nan=0.0, posinf=10, neginf=-10)
+    upper_bound = np.nan_to_num(x.ub.astype(np.float32), copy=True, nan=0.0, posinf=10, neginf=10)
+    lower_bound_tensor = torch.tensor(lower_bound, dtype=torch.float32)
+    upper_bound_tensor = torch.tensor(upper_bound, dtype=torch.float32)
+
+    random_input = torch.rand(*input_shape, dtype=torch.float32)
+    random_input = lower_bound_tensor + (upper_bound_tensor - lower_bound_tensor) * random_input
+
+    input_constr = gurobi_model.addConstr(x == random_input.numpy())
 
     current_objective = (gurobi_model.getObjective(), gurobi_model.ModelSense)
 
@@ -234,10 +242,17 @@ def check_correct_formulation(gurobi_model, nn_model, x, y):
 
     gurobi_output = y.X
 
+    print(gurobi_output)
+    print(output)
+
     gurobi_model.remove(input_constr)
     gurobi_model.setObjective(current_objective[0], current_objective[1])
     gurobi_model.update()
 
-    return np.max(np.abs(output - gurobi_output)) < 1e-5
+    error = np.max(np.abs(output - gurobi_output))
+
+    print("Diff: ", error)
+
+    return error < 1e-5
 
 

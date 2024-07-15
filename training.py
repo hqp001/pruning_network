@@ -27,7 +27,6 @@ args = parser.parse_args()
 SEED = 70
 SPARSITY = args.sparsity
 FOLDER_PATH = os.path.dirname(__file__)
-# MODEL_PATH=f"{FOLDER_PATH}/benchmarks/test/test_nano.onnx"
 MODEL_PATH=args.model_path
 
 
@@ -42,6 +41,8 @@ SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
 TRAIN_FIRST = True
 ROUNDS = 10
 DOUBLE = False
+CATEGORY = os.path.basename(os.path.dirname(os.path.dirname(MODEL_PATH)))
+DATASET = CIFAR10Dataset if CATEGORY == "oval21" else MNISTDataset
 
 def set_seed(seed):
 
@@ -53,14 +54,15 @@ def train_model(nn_model):
 
     print("Device to train: ", DEVICE)
 
-    train_loader = MNISTDataset(train=True, batch_size=64).get_data()
-    test_loader = MNISTDataset(train=False, batch_size=64).get_data()
+    train_loader = DATASET(train=True, batch_size=64).get_data()
+    test_loader = DATASET(train=False, batch_size=64).get_data()
 
     if not TRAIN_FIRST:
         print("Not using trained network")
         nn_model.apply(initialize_weights)
 
     if DOUBLE:
+        assert CATEGORY == "mnist_fc"
         print("Doubling Model")
         nn_model = DoubleModel(nn_model.layers)
         print(nn_model)
@@ -126,7 +128,6 @@ dense_model = dense_model_train()
 
 print(dense_model)
 
-
 if os.path.exists(DENSE_PATH):
     print(f"The file {DENSE_PATH} exists.")
 
@@ -143,12 +144,12 @@ if os.path.exists(DENSE_PATH):
 
 else:
         # Save the model state dictionary
-        print(f"The file {DENSE_PATH} does not exist. Saving the model state dictionary.")
+    print(f"The file {DENSE_PATH} does not exist. Saving the model state dictionary.")
 
-        # Ensure the directory exists
-        os.makedirs(os.path.dirname(DENSE_PATH), exist_ok=True)
+    # Ensure the directory exists
+    os.makedirs(os.path.dirname(DENSE_PATH), exist_ok=True)
 
-        torch.save(dense_model.state_dict(), f'{DENSE_PATH}')
+    torch.save(dense_model.state_dict(), f'{DENSE_PATH}')
 
 sparse_model = None
 

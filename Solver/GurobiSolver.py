@@ -5,7 +5,7 @@ import torchvision
 import numpy as np
 
 import gurobipy as gp
-from .torch2gurobi import add_predictor_constr
+from .torch2gurobi import add_predictor_constr, check_correct_formulation
 
 def dense_passing(model, where):
 
@@ -79,7 +79,6 @@ def solve_with_gurobi(nn_regression, dense_model, image_range, correct_label, wr
     # assert check_correct_formulation(m, nn_regression, x, y)
 
     m.setObjective(y[0][wrong_label] - y[0][correct_label], gp.GRB.MAXIMIZE)
-
 
     if callback == "none":
         # Add these contraints if neccessary

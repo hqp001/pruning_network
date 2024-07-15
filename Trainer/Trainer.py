@@ -9,8 +9,8 @@ class ModelTrainer:
 
     def train(self, model, data_loader, l1_reg=0, l2_reg=0):
 
-        #optimiser = torch.optim.Adam(params=model.parameters(), weight_decay=1e-4, lr=1e-3)
-        optimiser = torch.optim.SGD(params=model.parameters(), lr=self.learning_rate)
+        optimiser = torch.optim.Adam(params=model.parameters(), weight_decay=1e-4, lr=1e-3)
+        #optimiser = torch.optim.SGD(params=model.parameters(), lr=self.learning_rate)
 
         for epoch in range(self.max_epochs):
 
@@ -72,7 +72,6 @@ class ModelTrainer:
 
                 x = x.to(device=self.device)
                 y = y.to(device=self.device)
-                x = x.reshape((x.shape[0], -1))
 
                 scores = model(x)
                 _, predictions = scores.max(1)
