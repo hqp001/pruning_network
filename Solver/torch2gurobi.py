@@ -4,46 +4,107 @@ import gurobipy as gp
 
 def add_predictor_constr(gurobi_model, nn_model, x, y):
 
-    sequential = []
+    gurobi_nodes = {}
 
-    sequential.append(x)
+    for node in nn_model.graph.nodes:
 
-    for idx, layer in enumerate(nn_model.layers):
-        if (isinstance(layer, torch.nn.Linear)):
-            linear = add_linear_constr2(gurobi_model, sequential[-1], layer, name = f"linear_{idx}")
+        if node.op == 'placeholder':
 
-            sequential.append(linear)
+            gurobi_nodes[node.name] = x
 
-        elif (isinstance(layer, torch.nn.ReLU)):
-            relu = add_relu_constr2(gurobi_model, sequential[-1], name = f"relu_{idx}")
+        elif node.op == 'call_module':
 
-            sequential.append(relu)
+            try:
+                module_called = getattr(nn_model, node.target)
+            except AttributeError:
+                print(f"There is no attribute {node.target}")
 
-        elif (isinstance(layer, torch.nn.Conv2d)):
-            conv = add_conv2d_constr(gurobi_model, sequential[-1], layer, name = f"conv2d_{idx}")
+            if isinstance(module_called, torch.nn.Linear):
 
-            sequential.append(conv)
+                assert len(node.args) == 1
 
-        elif (isinstance(layer, torch.nn.Softmax)):
-            # Skipping Softmax layer
-            pass
+                input_node = gurobi_nodes[node.args[0].name]
 
-        elif (isinstance(layer, torch.nn.Flatten)):
+                output_node = add_linear_constr(gurobi_model, input_node, module_called, name=node.name)
 
-            flatten = add_flatten_constr(gurobi_model, sequential[-1], layer.start_dim, layer.end_dim, f"flattend_{idx}")
+                gurobi_nodes[node.name] = output_node
 
-            sequential.append(flatten)
+            elif isinstance(module_called, torch.nn.ReLU):
+
+                assert len(node.args) == 1
+
+                input_node = gurobi_nodes[node.args[0].name]
+
+                output_node = add_relu_constr2(gurobi_model, input_node, name=node.name)
+
+                gurobi_nodes[node.name] = output_node
+
+            elif isinstance(module_called, torch.nn.Conv2d):
+
+                assert len(node.args) == 1
+
+                input_node = gurobi_nodes[node.args[0].name]
+
+                output_node = add_conv2d_constr(gurobi_model, input_node, module_called, name=node.name)
+
+                gurobi_nodes[node.name] = output_node
+
+            elif isinstance(module_called, torch.nn.Flatten):
+
+                assert len(node.args) == 1
+
+                input_node = gurobi_nodes[node.args[0].name]
+
+                output_node = add_flatten_constr(gurobi_model, input_node, module_called, name=node.name)
+
+                gurobi_nodes[node.name] = output_node
+
+            else:
+
+                raise NotImplementedError(f"Not supported module {type(module_called)}")
+
+
+
+        elif node.op == 'call_function':
+
+            try:
+                function_called = getattr(nn_model, node.target)
+            except AttributeError:
+                print(f"There is no attribute {node.target}")
+
+            raise NotImplementedError(f"Not supported, pls implement by yourself")
+
+        elif node.op == 'get_attr':
+
+            try:
+                initialziers = getattr(nn_model, node.target)
+            except AttributeError:
+                print(f"There is no attribute {node.target}")
+
+        elif node.op == "output":
+
+            assert len(node.args) == 1
+
+            input_node = gurobi_nodes[node.args[0].name]
+
+            if y.shape != input_node.shape:
+                raise ValueError(f"Wrong shape for output array. Expected {input_node.shape}, got {y.shape}")
+
+            output_shape = y.shape
+
+            y = y.reshape(-1)
+            input_node = input_node.reshape(-1)
+
+            for i in range(y.size):
+                gurobi_model.addConstr(y[i] == input_node[i])
+
+            y = y.reshape(output_shape)
+            input_node = input_node.reshape(output_shape)
+
+            gurobi_nodes[node.name] = y
 
         else:
-            raise ValueError(f"Unknown Layer: {type(layer)}")
-
-    output = sequential[-1]
-
-    assert(y.size == output.size)
-
-    for i in range(y.shape[1]):
-
-        gurobi_model.addConstr(output[0][i] == y[0][i])
+            raise ValueError(f"Unexpected node opcode for {node.op}")
 
     return y
 
@@ -131,20 +192,6 @@ def add_conv2d_constr(gurobi_model, input_layer, conv_layer, name = "conv2d"):
 
 def add_linear_constr(gurobi_model, input_layer, linear_layer, name="linear"):
 
-    input_size = linear_layer.in_features
-    output_size = linear_layer.out_features
-
-    weight = linear_layer.weight.data.numpy()
-    bias = linear_layer.bias.data.numpy()
-
-    assert(input_size == input_layer.size and output_size == bias.size)
-
-    output_layer = ( input_layer @ weight.T ) + bias
-
-    return output_layer
-
-def add_linear_constr2(gurobi_model, input_layer, linear_layer, name="linear"):
-
     assert input_layer.shape[0] == 1
     assert len(input_layer.shape) == 2
 
@@ -198,7 +245,10 @@ def add_relu_constr(gurobi_model, input_layer, name):
 
     return output_layer
 
-def add_flatten_constr(gurobi_model, input_layer, start_dim, end_dim, name):
+def add_flatten_constr(gurobi_model, input_layer, module, name):
+
+    start_dim = module.start_dim
+    end_dim = module.end_dim
 
     if end_dim < 0:
         end_dim = input_layer.ndim + end_dim

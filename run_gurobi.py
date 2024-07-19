@@ -8,12 +8,12 @@ import onnx
 from onnx2torch import convert
 from vnnlib.compat import read_vnnlib_simple
 
-from utils.Model import ONNXModel, DoubleModel
+from utils.Model import ONNXModel, DoubleModel, count_params
 from Solver.GurobiSolver import solve_with_gurobi
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
 parser.add_argument('--sparsity',
-        default=0.5,
+        default=0.9,
         type=float,
         required=False,
         help="Sparsity level (between 0 and 1)")
@@ -25,29 +25,17 @@ parser.add_argument('--model_path',
 parser.add_argument('--instance_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/oval21/vnnlib/cifar_base_kw-img4763-eps0.024705882352941175.vnnlib",
+        default=f"./vnncomp2022_benchmarks/benchmarks/oval21/vnnlib/cifar_base_kw-img3568-eps0.030457516339869282.vnnlib",
         help='Path to the instance file')
 parser.add_argument('--time_limit',
         type=int,
         required=False,
         default=300,
         help='Time limit for the program in seconds (default is 3600 seconds)')
-parser.add_argument('--output_path',
-        type=str,
-        required=False,
-        default="output.txt",
-        help="Output path")
-parser.add_argument('--subfolder',
-        type=str,
-        required=False,
-        default="trained_0.5",
-        help="Subfolder name")
-parser.add_argument('--callback',
-        type=str,
-        required=False,
-        default="none",
-        help="Name of call back function")
-
+parser.add_argument('--output_path', type=str, required=False, default="output.txt", help="Output path")
+parser.add_argument('--subfolder', type=str, required=False, default="a", help="Subfolder name")
+parser.add_argument('--callback', type=str, required=False, default="none", help="Name of call back function")
+parser.add_argument('--double', action="store_true", help="Convert to model twice as large")
 
 args = parser.parse_args()
 
@@ -63,17 +51,31 @@ OUTPUT_PATH = f"{args.output_path}"
 SUBFOLDER = args.subfolder
 
 MODEL_NAME, _ = os.path.splitext(os.path.basename(ONNX_PATH))
-LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}"
+LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}_{SPARSITY}"
 DENSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}.pth"
-SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
+SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.onnx"
 
-DOUBLE = True
+DOUBLE = args.double
 
 CALLBACK = args.callback
 
-INPUT_SIZE = 3072
-OUTPUT_SIZE = 10
-INPUT_SHAPE = (1, 3, 32, 32)
+CATEGORY = os.path.basename(os.path.dirname(os.path.dirname(ONNX_PATH)))
+
+if CATEGORY == "oval21":
+
+    INPUT_SIZE = 3072
+    OUTPUT_SIZE = 10
+    INPUT_SHAPE = (1, 3, 32, 32)
+
+elif CATEGORY == "mnist_fc":
+
+    INPUT_SIZE = 784
+    OUTPUT_SIZE = 10
+    INPUT_SHAPE = (1, 28, 28)
+
+else:
+
+    raise ValueError(f"Unknown Category: {CATEGORY}")
 
 def run_gurobi(sparse_model, dense_model, input):
 
@@ -97,16 +99,9 @@ def run_gurobi(sparse_model, dense_model, input):
 
 def import_model(file_name):
 
-    onnx_model = convert(onnx.load(ONNX_PATH))
+    onnx_model = convert(onnx.load(file_name))
 
-    torch_model = ONNXModel(onnx_model)
-
-    if DOUBLE:
-        torch_model = DoubleModel(torch_model.layers)
-
-    torch_model.load_state_dict(torch.load(file_name))
-
-    return torch_model
+    return onnx_model
 
 def get_image(file_name):
 
@@ -133,14 +128,15 @@ def print_result_to_file(result, x_max, y_max):
             f.write(")")
 
 
-SPARSE_PATH = DENSE_PATH if SPARSITY == 0 else SPARSE_PATH
+dense_model = import_model(ONNX_PATH)
 
-dense_model = import_model(DENSE_PATH)
+if SPARSITY == 0:
+    sparse_model = import_model(ONNX_PATH)
+else:
+    sparse_model = import_model(SPARSE_PATH)
 
-sparse_model = import_model(SPARSE_PATH)
-
-print("Dense # Params: ", dense_model.count_parameters())
-print("Sparse # Params: ", sparse_model.count_parameters())
+print("Dense # Params: ", count_params(dense_model))
+print("Sparse # Params: ", count_params(sparse_model))
 
 x_max, _max, time_count, correct_label, wrong_label = run_gurobi(sparse_model, dense_model, get_image(INSTANCE_PATH))
 

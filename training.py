@@ -12,15 +12,17 @@ from onnx2torch import convert
 from Trainer.Dataset import MNISTDataset, CIFAR10Dataset
 from Trainer.Pruner import Pruner
 from Trainer.Trainer import ModelTrainer
-from utils.Model import ONNXModel, DoubleModel
+from utils.Model import ONNXModel, DoubleModel, count_params, init_weights, apply_mask
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
 
-parser.add_argument('--sparsity', default=0.5, type=float, required=False, help="Sparsity level (between 0 and 1)")
+parser.add_argument('--sparsity', default=0.9, type=float, required=False, help="Sparsity level (between 0 and 1)")
 
-parser.add_argument('--model_path', default="./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx", type=str, required=False, help="Model path")
+parser.add_argument('--model_path', default="./vnncomp2022_benchmarks/benchmarks/sri_resnet_a/onnx/resnet_3b2_bn_mixup_adv_4.0_bs128_lr-1.onnx", type=str, required=False, help="Model path")
 
 parser.add_argument('--sub_folder', default="a", type=str, required=False, help="Path to subfolder")
+
+parser.add_argument('--double', action="store_true", help="Convert to model twice as large")
 
 args = parser.parse_args()
 
@@ -35,14 +37,31 @@ SAVE_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{args.sub_folder}_{SPARSITY}"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 DENSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}.pth"
-SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.pth"
+SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.onnx"
 
 
 TRAIN_FIRST = True
-ROUNDS = 10
-DOUBLE = False
+ROUNDS = 1
+DOUBLE = args.double # TODO: Implement todo
 CATEGORY = os.path.basename(os.path.dirname(os.path.dirname(MODEL_PATH)))
-DATASET = CIFAR10Dataset if CATEGORY == "oval21" else MNISTDataset
+
+if CATEGORY == "oval21" or CATEGORY == "sri_resnet_a":
+
+    DATASET = CIFAR10Dataset
+    INPUT_SIZE = 3072
+    OUTPUT_SIZE = 10
+    INPUT_SHAPE = (1, 3, 32, 32)
+
+elif CATEGORY == "mnist_fc":
+
+    DATASET = MNISTDataset
+    INPUT_SIZE = 784
+    OUTPUT_SIZE = 10
+    INPUT_SHAPE = (1, 28, 28)
+
+else:
+
+    raise ValueError(f"Unknown Category: {CATEGORY}")
 
 def set_seed(seed):
 
@@ -54,8 +73,8 @@ def train_model(nn_model):
 
     print("Device to train: ", DEVICE)
 
-    train_loader = DATASET(train=True, batch_size=64).get_data()
-    test_loader = DATASET(train=False, batch_size=64).get_data()
+    train_loader = DATASET(train=True, batch_size=1).get_data()
+    test_loader = DATASET(train=False, batch_size=1).get_data()
 
     if not TRAIN_FIRST:
         print("Not using trained network")
@@ -69,12 +88,12 @@ def train_model(nn_model):
 
     nn_model = nn_model.to(device=DEVICE)
 
-    trainer = ModelTrainer(max_epochs=50, learning_rate= 1e-2, device=DEVICE)
+    trainer = ModelTrainer(max_epochs=1, learning_rate= 1e-2, device=DEVICE)
 
     print("Accuracy before training: ", trainer.calculate_score(nn_model, test_loader))
 
     initial_weights = deepcopy(nn_model.state_dict())
-    total_parameters = nn_model.count_parameters()
+    total_parameters = count_params(nn_model)
     prune_pc_per_round = 1 - (1 - SPARSITY) ** (1 / ROUNDS)
 
     print("Total Params:", total_parameters)
@@ -88,29 +107,44 @@ def train_model(nn_model):
         pruned_model = Pruner(model=nn_model, sparsity=prune_pc_per_round).prune().get_model()
 
         # Reset model
-        nn_model.initialize_weights(initial_weights)
+        init_weights(nn_model, initial_weights)
 
         # print(f"Model accuracy: {accuracy:.3f}%")
         # print(f"New parameters: {n_pruned_parameters}/{total_parameters}")
 
-    trainer = ModelTrainer(max_epochs=100, learning_rate=1e-3, device=DEVICE)
+    trainer = ModelTrainer(max_epochs=1, learning_rate=1e-3, device=DEVICE)
     trainer.train(nn_model, train_loader)
 
-    nn_model.apply_mask()
+    apply_mask(nn_model)
 
     test_score = trainer.calculate_score(nn_model, test_loader)
 
     nn_model = nn_model.to("cpu")
     return nn_model, test_score
 
-def dense_model_train():
+def import_model(file_path):
 
     # Convert to PyTorch
-    onnx_model = convert(onnx.load(MODEL_PATH))
+    onnx_model = convert(onnx.load(file_path))
 
-    torch_model = ONNXModel(onnx_model)
+    return onnx_model
 
-    return torch_model
+def export_model(model, file_path):
+
+    dummy_input = torch.randn(*INPUT_SHAPE)
+
+    print(model(dummy_input))
+
+    torch.onnx.export(model,
+        dummy_input,
+        file_path,
+        export_params=True,
+        opset_version=11,
+        do_constant_folding=True,
+        input_names=['input'],
+        output_names=['output'],
+        dynamic_axes={ 'input': {0: 'batch_size'},
+            'output': {0: 'batch_size'}})
 
 def initialize_weights(layer):
     if isinstance(layer, torch.nn.Linear):
@@ -124,41 +158,24 @@ set_seed(SEED)
 
 start = time.time()
 
-dense_model = dense_model_train()
+dense_model = import_model(MODEL_PATH)
 
-print(dense_model)
-
-if os.path.exists(DENSE_PATH):
-    print(f"The file {DENSE_PATH} exists.")
-
-    # Load the state dictionary from the file
-    loaded_state_dict = torch.load(DENSE_PATH)
-
-    # Get the current model's state dictionary
-    current_state_dict = dense_model.state_dict()
-
-    # Compare the state dictionaries
-    state_dicts_equal = all(torch.equal(current_state_dict[key], loaded_state_dict[key]) for key in current_state_dict)
-
-    assert state_dicts_equal == True
-
-else:
-        # Save the model state dictionary
-    print(f"The file {DENSE_PATH} does not exist. Saving the model state dictionary.")
-
-    # Ensure the directory exists
-    os.makedirs(os.path.dirname(DENSE_PATH), exist_ok=True)
-
-    torch.save(dense_model.state_dict(), f'{DENSE_PATH}')
+export_model(dense_model, "./a.onnx")
 
 sparse_model = None
 
-sparse_model, validation_score = train_model(dense_model_train())
+sparse_model, validation_score = train_model(import_model(MODEL_PATH))
 
-torch.save(sparse_model.state_dict(), SPARSE_PATH)
+print("Dense Model: ", dense_model)
+
+print("Sparse Model: ", sparse_model)
+
+os.makedirs(os.path.dirname(SPARSE_PATH), exist_ok=True)
+
+export_model(sparse_model, SPARSE_PATH)
 
 print("\n----------------------\n")
 print("Test score: ", validation_score)
-print("Dense # Parameters: ", dense_model.count_parameters())
-print("Sparse # Parameters: ", sparse_model.count_parameters())
+print("Dense # Parameters: ", count_params(dense_model))
+print("Sparse # Parameters: ", count_params(sparse_model))
 print("Total time training: ", time.time() - start)

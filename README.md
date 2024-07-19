@@ -3,7 +3,7 @@
 ## How to setup:
 
 ```bash
-./scripts/setup.sh
+sh ./scripts/setup.sh
 ```
 
 ## Folders and Files
@@ -48,7 +48,7 @@ To run the solver, you can either execute the `run_gurobi.py` script or use the 
 python run_gurobi.py
 
 # Using shell script
-./bisonnet-template_cpu.sh
+sh ./bisonnet-template_cpu.sh
 
 # or
 
