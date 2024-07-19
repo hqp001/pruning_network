@@ -9,6 +9,6 @@
 #SBATCH --mail-user=username@bucknell.edu # address to email
 #SBATCH --mail-type=ALL # mail events (NONE, BEGIN, END, FAIL, ALL)
 
-module load gurobi-optimizer
+module load gurobi-optimizer/
 
-./scripts/run_gurobi_MNIST.sh 0.8 sgd_trained dense_passing
+./scripts/run_gurobi_MNIST.sh oval21 0.9 trained dense_passing
