@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR=$(dirname $(realpath "$0"))
 BENCHMARK_FOLDER="$SCRIPT_DIR/../vnncomp2022_benchmarks"
 RESULTS_FOLDER="$SCRIPT_DIR/../vnncomp2022_results"
 
