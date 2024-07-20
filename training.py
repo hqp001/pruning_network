@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description="Model state dictionary checker and
 
 parser.add_argument('--sparsity', default=0.9, type=float, required=False, help="Sparsity level (between 0 and 1)")
 
-parser.add_argument('--model_path', default="./vnncomp2022_benchmarks/benchmarks/sri_resnet_a/onnx/resnet_3b2_bn_mixup_adv_4.0_bs128_lr-1.onnx", type=str, required=False, help="Model path")
+parser.add_argument('--model_path', default="./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx", type=str, required=False, help="Model path")
 
 parser.add_argument('--sub_folder', default="a", type=str, required=False, help="Path to subfolder")
 
@@ -73,8 +73,8 @@ def train_model(nn_model):
 
     print("Device to train: ", DEVICE)
 
-    train_loader = DATASET(train=True, batch_size=1).get_data()
-    test_loader = DATASET(train=False, batch_size=1).get_data()
+    train_loader = DATASET(train=True, batch_size=64).get_data()
+    test_loader = DATASET(train=False, batch_size=64).get_data()
 
     if not TRAIN_FIRST:
         print("Not using trained network")
@@ -133,8 +133,6 @@ def export_model(model, file_path):
 
     dummy_input = torch.randn(*INPUT_SHAPE)
 
-    print(model(dummy_input))
-
     torch.onnx.export(model,
         dummy_input,
         file_path,
@@ -159,8 +157,6 @@ set_seed(SEED)
 start = time.time()
 
 dense_model = import_model(MODEL_PATH)
-
-export_model(dense_model, "./a.onnx")
 
 sparse_model = None
 
