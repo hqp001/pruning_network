@@ -4,14 +4,14 @@
 
 ### Set up environment:
 
-For Bisonnet only:
+#### For Bisonnet only:
 
 ```bash
 module load gurobi-optimizer
 pip install onnx onnx2torch vnnlib
 ```
 
-For other Linux machine:
+#### For other Linux machine:
 
 ```bash
 conda env create -n venv --file=environment.yml
