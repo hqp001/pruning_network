@@ -11,12 +11,20 @@ module load gurobi-optimizer
 pip install onnx onnx2torch vnnlib
 ```
 
-For Linux machine:
+For other Linux machine:
 
 ```bash
 conda env create -n venv --file=environment.yml
 conda activate venv
 ```
+
+If you install this on Linux computer, the default path for Gurobi license file is `/opt/gurobi/gurobi.lic` or you can change it using:
+
+```bash
+conda env config vars set GRB_LICENSE_FILE=<path-to-gurobi.lic>
+```
+
+I haven't set it up for Windows so these might not work on Windows
 
 ### Set up benchmark:
 
