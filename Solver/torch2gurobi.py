@@ -6,6 +6,8 @@ def add_predictor_constr(gurobi_model, nn_model, x, y):
 
     gurobi_nodes = {}
 
+    nn_model.graph.print_tabular()
+
     for node in nn_model.graph.nodes:
 
         if node.op == 'placeholder':
@@ -121,8 +123,8 @@ def add_conv2d_constr(gurobi_model, input_layer, conv_layer, name = "conv2d"):
     padding = conv_layer.padding
     dilation = conv_layer.dilation
 
-    weight = conv_layer.weight
-    bias = conv_layer.bias
+    weight = conv_layer.weight.detach().numpy()
+    bias = conv_layer.bias.detach().numpy()
 
     dummy_output = conv_layer(torch.ones(input_layer.shape))
 
@@ -143,52 +145,51 @@ def add_conv2d_constr(gurobi_model, input_layer, conv_layer, name = "conv2d"):
             else:
                 var_list.append(gurobi_var[index_tensor[i] - 1])
 
-        return gp.MVar.fromlist(var_list)
+        return var_list
 
-    def convo(image, filter_weight, unfolded_tensor, zero_var):
+    def create_var_image(image, unfolded_tensor, zero_var):
         feature_map = []
 
-        index_tensor = torch.arange(1, image.size + 1, dtype=torch.float32)
+        index_tensor = torch.arange(1, in_size[0] * in_size[1] + 1, dtype=torch.float32)
 
-        unf = unfolded_tensor(index_tensor.view(1, image.shape[0], image.shape[1])).transpose(0, 1).int().numpy()
+        unf = unfolded_tensor(index_tensor.view(1, in_size[0], in_size[1])).transpose(0, 1).int().numpy()
 
         for i in range(unf.shape[0]):
 
             gurobi_patch = index_tensor_to_MVar(unf[i], image.reshape(-1), zero_var)
 
-            feature_pixel = gurobi_patch @ filter_weight.reshape(-1).T
+            feature_map.append(gurobi_patch)
 
-            feature_map.append(feature_pixel)
+        gurobi_model.update()
 
-        return feature_map
+        return gp.MVar.fromlist(feature_map)
 
     zero_var = gurobi_model.addVar(lb=0, ub=0, name="zero")
 
-    output_images = gurobi_model.addMVar((1, out_channels, out_size[0], out_size[1]), lb=-gp.GRB.INFINITY, name=name)
-    output_images = output_images.reshape(1, out_channels, -1)
+    output_shape = (1, out_channels, out_size[0], out_size[1])
 
-    for i in range(out_channels):
-        feature_image = []
+    output_layer = gurobi_model.addMVar(output_shape, lb=-gp.GRB.INFINITY, name=name)
 
-        for j in range(out_size[0] * out_size[1]):
-            feature_image.append(bias[i].item())
+    output_image_shape = (1, out_channels, out_size[0] * out_size[1])
+    output_images = gurobi_model.addMVar(output_image_shape, lb=0, ub=0, name="zero_MVar")
+    output_images = output_images + (np.ones(output_image_shape) * bias.reshape(1, out_channels, 1))
 
-        for j in range(in_channels):
+    for in_channel in range(in_channels):
 
-            feature_map = convo(input_layer[0][j], weight[i][j].detach().numpy(), unfolded_tensor, zero_var)
+        unfolded_image = create_var_image(input_layer[0][in_channel], unfolded_tensor, zero_var)
 
-            assert len(feature_map) == len(feature_image)
+        for out_channel in range(out_channels):
 
-            for k in range(len(feature_image)):
-                feature_image[k] += feature_map[k]
+            kernel = weight[out_channel][in_channel].reshape(-1)
+            feature_image = unfolded_image @ kernel
+            output_images[0][out_channel] += feature_image
 
-        for j in range(len(feature_image)):
+    output_layer = output_layer.reshape(output_image_shape)
+    gurobi_model.addConstr(output_layer == output_images)
 
-            gurobi_model.addConstr(output_images[0][i][j] == feature_image[j])
+    output_layer = output_layer.reshape(output_shape)
 
-    output_images = output_images.reshape(1, out_channels, out_size[0], out_size[1])
-
-    return output_images
+    return output_layer
 
 def add_linear_constr(gurobi_model, input_layer, linear_layer, name="linear"):
 

@@ -36,7 +36,6 @@ parser.add_argument('--time_limit',
 parser.add_argument('--output_path', type=str, required=False, default="output.txt", help="Output path")
 parser.add_argument('--subfolder', type=str, required=False, default="a", help="Subfolder name")
 parser.add_argument('--callback', type=str, required=False, default="none", help="Name of call back function")
-#parser.add_argument('--double', action="store_true", help="Convert to model twice as large")
 
 args = parser.parse_args()
 
@@ -61,7 +60,7 @@ CALLBACK = args.callback
 # Output info
 OUTPUT_PATH = f"{args.output_path}"
 
-if CATEGORY == "oval21":
+if CATEGORY == "oval21" or CATEGORY == 'cifar2020':
 
     INPUT_SIZE = 3072
     OUTPUT_SIZE = 10
@@ -102,13 +101,6 @@ def get_image(file_name):
     result = read_vnnlib_simple(file_name, INPUT_SIZE, OUTPUT_SIZE)
 
     return result[0][0], result[0][1]
-
-
-def set_seed(seed):
-
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    random.seed(seed)
 
 dense_model = import_model(ONNX_PATH)
 

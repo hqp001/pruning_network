@@ -51,7 +51,7 @@ ROUNDS = 1
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = args.batch_size
 
-if CATEGORY == "oval21" or CATEGORY == "sri_resnet_a":
+if CATEGORY == "oval21" or CATEGORY == "sri_resnet_a" or CATEGORY == "cifar2020":
 
     DATASET = CIFAR10Dataset
     INPUT_SIZE = 3072
