@@ -49,12 +49,13 @@ MODEL_NAME, _ = os.path.splitext(os.path.basename(ONNX_PATH))
 CATEGORY = os.path.basename(os.path.dirname(os.path.dirname(ONNX_PATH)))
 TIME_LIMIT = args.time_limit
 
-# Solver info
+# Surrogate model info
 SPARSITY = args.sparsity
 SUBFOLDER = args.subfolder
 LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}_{SPARSITY}"
 SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.onnx"
 
+# Solver info
 CALLBACK = args.callback
 
 # Output info
