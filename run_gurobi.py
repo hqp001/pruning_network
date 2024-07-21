@@ -8,7 +8,8 @@ import onnx
 from onnx2torch import convert
 from vnnlib.compat import read_vnnlib_simple
 
-from utils.Model import ONNXModel, DoubleModel, count_params
+from utils.IO import import_model, export_solver_results
+from utils.ModelHelpers import count_params
 from Solver.GurobiSolver import solve_with_gurobi
 
 parser = argparse.ArgumentParser(description="Model state dictionary checker and saver.")
@@ -20,12 +21,12 @@ parser.add_argument('--sparsity',
 parser.add_argument('--model_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/oval21/onnx/cifar_base_kw.onnx",
+        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/onnx/mnist-net_256x2.onnx",
         help='Path to the model file')
 parser.add_argument('--instance_path',
         type=str,
         required=False,
-        default=f"./vnncomp2022_benchmarks/benchmarks/oval21/vnnlib/cifar_base_kw-img3568-eps0.030457516339869282.vnnlib",
+        default=f"./vnncomp2022_benchmarks/benchmarks/mnist_fc/vnnlib/prop_1_0.03.vnnlib",
         help='Path to the instance file')
 parser.add_argument('--time_limit',
         type=int,
@@ -35,31 +36,29 @@ parser.add_argument('--time_limit',
 parser.add_argument('--output_path', type=str, required=False, default="output.txt", help="Output path")
 parser.add_argument('--subfolder', type=str, required=False, default="a", help="Subfolder name")
 parser.add_argument('--callback', type=str, required=False, default="none", help="Name of call back function")
-parser.add_argument('--double', action="store_true", help="Convert to model twice as large")
+#parser.add_argument('--double', action="store_true", help="Convert to model twice as large")
 
 args = parser.parse_args()
 
-SPARSITY = args.sparsity
-TIME_LIMIT = args.time_limit
-
 FOLDER_PATH = os.path.dirname(__file__)
 
+# Instance info
 ONNX_PATH = f"{args.model_path}"
 INSTANCE_PATH = f"{args.instance_path}"
-OUTPUT_PATH = f"{args.output_path}"
-
-SUBFOLDER = args.subfolder
-
 MODEL_NAME, _ = os.path.splitext(os.path.basename(ONNX_PATH))
-LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}_{SPARSITY}"
-DENSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}.pth"
-SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.onnx"
+CATEGORY = os.path.basename(os.path.dirname(os.path.dirname(ONNX_PATH)))
+TIME_LIMIT = args.time_limit
 
-DOUBLE = args.double
+# Solver info
+SPARSITY = args.sparsity
+SUBFOLDER = args.subfolder
+LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}_{SPARSITY}"
+SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.onnx"
 
 CALLBACK = args.callback
 
-CATEGORY = os.path.basename(os.path.dirname(os.path.dirname(ONNX_PATH)))
+# Output info
+OUTPUT_PATH = f"{args.output_path}"
 
 if CATEGORY == "oval21":
 
@@ -97,12 +96,6 @@ def run_gurobi(sparse_model, dense_model, input):
     #print(max_, time_count, correct_label, wrong_label)
     return x_max, max_, time_count, correct_label, wrong_label
 
-def import_model(file_name):
-
-    onnx_model = convert(onnx.load(file_name))
-
-    return onnx_model
-
 def get_image(file_name):
 
     result = read_vnnlib_simple(file_name, INPUT_SIZE, OUTPUT_SIZE)
@@ -116,18 +109,6 @@ def set_seed(seed):
     torch.manual_seed(seed)
     random.seed(seed)
 
-def print_result_to_file(result, x_max, y_max):
-    with open(OUTPUT_PATH, "w") as f:
-        f.write(result + "\n")
-        if x_max is not None:
-            f.write("(")
-            for idx, value in enumerate(x_max):
-                f.write(f"(X_{idx} {value})\n")
-            for idx, value in enumerate(y_max):
-                f.write(f"(Y_{idx} {value})\n")
-            f.write(")")
-
-
 dense_model = import_model(ONNX_PATH)
 
 if SPARSITY == 0:
@@ -140,22 +121,19 @@ print("Sparse # Params: ", count_params(sparse_model))
 
 x_max, _max, time_count, correct_label, wrong_label = run_gurobi(sparse_model, dense_model, get_image(INSTANCE_PATH))
 
+dense_model.eval()
+
 if x_max is not None:
-    dense_model.eval()
     with torch.no_grad():
         y_max = dense_model.forward(torch.tensor(x_max, dtype=torch.float32))
         dense_output = torch.argmax(y_max).item()
-
 else:
     dense_output = None
 
 if dense_output != None and dense_output != correct_label:
     y_max = dense_model.forward(torch.tensor(x_max, dtype=torch.float32)).detach().numpy()
-    print_result_to_file("sat", x_max.reshape(-1), y_max.reshape(-1))
+    export_solver_results("sat", x_max.reshape(-1), y_max.reshape(-1), OUTPUT_PATH)
 
 else:
-    print_result_to_file("unsat", None, None)
-
-#append_to_csv(f"{file_path}/summary_{sparsity}.csv", data_dict=data_dict)
-
+    export_solver_results("unsat", None, None, OUTPUT_PATH)
 

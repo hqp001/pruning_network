@@ -1,39 +1,41 @@
-import torch.nn.utils.prune as prune
-from torch import nn
 import torch
-import torch.nn.functional as functional
-import tqdm
+import torch.nn.utils.prune as prune
 import numpy as np
+import tqdm
 
-from utils.Model import count_params
+from utils.ModelHelpers import count_params
 
 class Pruner:
 
-    def __init__(self, model, sparsity = 0):
+    def __init__(self, sparsity = 0):
 
         self.sparsity = sparsity
 
-        self.model = model
+    def prune(self, model):
 
-    def prune(self):
-
-        total_parameters = count_params(self.model)
+        total_parameters = count_params(model)
 
         parameters_to_prune = []
 
-        for name, module in self.model.named_modules():
-            if isinstance(module, nn.Linear):
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Linear):
                 parameters_to_prune.append((module, 'weight'))
-            if isinstance(module, nn.Conv2d):
+            if isinstance(module, torch.nn.Conv2d):
                 parameters_to_prune.append((module, 'weight'))
 
         prune.global_unstructured(parameters_to_prune, pruning_method=prune.L1Unstructured, amount=self.sparsity)
 
-        print("Pruned: ", total_parameters - count_params(self.model))
+        print("Pruned: ", total_parameters - count_params(model))
 
-        return self
+        return model
 
+    @staticmethod
+    def apply_mask(model):
+        for name, module in model.named_modules():
+            if isinstance(module, torch.nn.Linear):
+                prune.remove(module, 'weight')
+            if isinstance(module, torch.nn.Conv2d):
+                prune.remove(module, 'weight')
 
-    def get_model(self):
+        return model
 
-        return self.model
