@@ -19,4 +19,4 @@ timeout=$6
 echo "${SUBFOLDER}_${SPARSITY}" $CALLBACK
 
 # Run the Python script with the provided arguments
-python ${RUN_FILE} --sparsity $SPARSITY --callback $CALLBACK --subfolder "${SUBFOLDER}" --model_path "$onnx_file_path" --instance_path "$vnnlib_file_path" --output_path "$results_file_path" --time_limit "$timeout"
+python ${RUN_FILE} --sparsity $SPARSITY --callback $CALLBACK --sub_folder "${SUBFOLDER}" --model_path "$onnx_file_path" --instance_path "$vnnlib_file_path" --output_path "$results_file_path" --time_limit "$timeout"

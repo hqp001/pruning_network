@@ -34,7 +34,7 @@ parser.add_argument('--time_limit',
         default=300,
         help='Time limit for the program in seconds (default is 3600 seconds)')
 parser.add_argument('--output_path', type=str, required=False, default="output.txt", help="Output path")
-parser.add_argument('--subfolder', type=str, required=False, default="a", help="Subfolder name")
+parser.add_argument('--sub_folder', type=str, required=False, default="a", help="Subfolder name")
 parser.add_argument('--callback', type=str, required=False, default="none", help="Name of call back function")
 
 args = parser.parse_args()
@@ -50,7 +50,7 @@ TIME_LIMIT = args.time_limit
 
 # Surrogate model info
 SPARSITY = args.sparsity
-SUBFOLDER = args.subfolder
+SUBFOLDER = args.sub_folder
 LOAD_MODEL_PATH = f"{FOLDER_PATH}/pytorch_model/{SUBFOLDER}_{SPARSITY}"
 SPARSE_PATH = f"{LOAD_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.onnx"
 

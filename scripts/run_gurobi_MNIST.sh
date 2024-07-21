@@ -1,10 +1,11 @@
+#!/bin/bash
 # run measurements for all categories for a single tool (passed on command line)
 # seven args: 'v1' (version string), tool_scripts_folder, vnncomp_folder, result_csv_file, counterexamples_folder, categories, all|different|first
 #
 # for example ./run_all_categories.sh v1 ~/repositories/simple_adversarial_generator/vnncomp_scripts . ./out.csv ./counterexamples "test acasxu" all
 
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR=$(dirname $(realpath "$0"))
 MAIN_FOLDER="${SCRIPT_DIR}/.."
 BENCHMARK_FOLDER="${MAIN_FOLDER}/vnncomp2022_benchmarks"
 RESULTS_FOLDER="${MAIN_FOLDER}/vnncomp2022_results"
