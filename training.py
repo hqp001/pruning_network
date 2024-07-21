@@ -27,6 +27,8 @@ parser.add_argument('--double', action="store_true", help="Convert to model twic
 
 parser.add_argument('--batch_size', default=64, type=int, required=False, help="Batch size for training and testing")
 
+parser.add_argument('--random_init', action="store_true", help="Start with random network or no (not recommended)")
+
 args = parser.parse_args()
 
 SEED = 70
@@ -44,7 +46,7 @@ SPARSE_PATH = f"{SAVE_MODEL_PATH}/{MODEL_NAME}_{SPARSITY}.onnx"
 
 # Training info
 DOUBLE = args.double
-TRAIN_FIRST = True
+RANDOM_INIT = args.random_init
 ROUNDS = 1
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = args.batch_size
@@ -80,7 +82,7 @@ def train_model(nn_model):
     train_loader = DATASET(train=True, batch_size=BATCH_SIZE).get_data()
     test_loader = DATASET(train=False, batch_size=BATCH_SIZE).get_data()
 
-    if not TRAIN_FIRST:
+    if RANDOM_INIT:
         print("Not using trained network")
         nn_model.apply(initialize_weights)
 
