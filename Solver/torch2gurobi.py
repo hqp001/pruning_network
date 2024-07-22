@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import gurobipy as gp
+import onnx2torch
 
 def add_predictor_constr(gurobi_model, nn_model, x, y):
 
@@ -16,10 +17,7 @@ def add_predictor_constr(gurobi_model, nn_model, x, y):
 
         elif node.op == 'call_module':
 
-            try:
-                module_called = getattr(nn_model, node.target)
-            except AttributeError:
-                print(f"There is no attribute {node.target}")
+            module_called = getattr(nn_model, node.target)
 
             if isinstance(module_called, torch.nn.Linear):
 
@@ -61,27 +59,59 @@ def add_predictor_constr(gurobi_model, nn_model, x, y):
 
                 gurobi_nodes[node.name] = output_node
 
+            elif isinstance(module_called, onnx2torch.node_converters.binary_math_operations.OnnxBinaryMathOperation):
+
+                assert(len(node.args) == 2)
+                assert module_called.math_op_function == torch.add
+
+                lhs = gurobi_nodes[node.args[0].name]
+                rhs = gurobi_nodes[node.args[1].name]
+
+                assert(lhs.shape == rhs.shape)
+
+                output_shape = lhs.shape
+
+                output_node = gurobi_model.addMVar(output_shape, lb=-gp.GRB.INFINITY, name=node.name)
+
+                gurobi_model.addConstr(output_node == lhs + rhs)
+
+                gurobi_nodes[node.name] = output_node
+
+            elif isinstance(module_called, onnx2torch.node_converters.reshape.OnnxReshape):
+
+                assert(len(node.args) == 2)
+
+                tensor_to_reshape = gurobi_nodes[node.args[0].name]
+                shape = gurobi_nodes[node.args[1].name]
+
+                gurobi_nodes[node.name] = tensor_to_reshape.reshape(shape)
+
+
             else:
 
                 raise NotImplementedError(f"Not supported module {type(module_called)}")
 
-
-
         elif node.op == 'call_function':
 
-            try:
-                function_called = getattr(nn_model, node.target)
-            except AttributeError:
-                print(f"There is no attribute {node.target}")
+            function_called = getattr(nn_model, node.target)
 
             raise NotImplementedError(f"Not supported, pls implement by yourself")
 
         elif node.op == 'get_attr':
 
-            try:
-                initialziers = getattr(nn_model, node.target)
-            except AttributeError:
-                print(f"There is no attribute {node.target}")
+            target = node.target
+            target_atoms = target.split('.')
+            attr_itr = nn_model
+            for i, atom in enumerate(target_atoms):
+                if not hasattr(attr_itr, atom):
+                    raise RuntimeError(f"Node referenced nonexistant target {'.'.join(target_atoms[:i])}")
+                attr_itr = getattr(attr_itr, atom)
+
+            assert(isinstance(attr_itr, torch.Tensor))
+
+            output_layer = attr_itr.detach().numpy()
+
+            gurobi_nodes[node.name] = output_layer
 
         elif node.op == "output":
 

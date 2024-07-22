@@ -60,7 +60,7 @@ CALLBACK = args.callback
 # Output info
 OUTPUT_PATH = f"{args.output_path}"
 
-if CATEGORY == "oval21" or CATEGORY == 'cifar2020':
+if CATEGORY == "oval21" or CATEGORY == "sri_resnet_a" or CATEGORY == 'cifar2020':
 
     INPUT_SIZE = 3072
     OUTPUT_SIZE = 10
