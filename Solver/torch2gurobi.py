@@ -160,8 +160,6 @@ def add_conv2d_constr(gurobi_model, input_layer, conv_layer, name = "conv2d"):
 
             feature_map.append(gurobi_patch)
 
-        gurobi_model.update()
-
         return gp.MVar.fromlist(feature_map)
 
     zero_var = gurobi_model.addVar(lb=0, ub=0, name="zero")
